@@ -21,6 +21,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *  USA
  *
+ *  $Id: irc_string.h 3538 2007-07-26 14:21:57Z jilles $
  */
 
 #ifndef INCLUDED_match_h
@@ -88,7 +89,7 @@ extern const unsigned char ToLowerTab[];
 extern const unsigned char ToUpperTab[];
 #define ToUpper(c) (ToUpperTab[(unsigned char)(c)])
 
-extern unsigned int CharAttrs[];
+extern const unsigned int CharAttrs[];
 
 #define PRINT_C   0x001
 #define CNTRL_C   0x002

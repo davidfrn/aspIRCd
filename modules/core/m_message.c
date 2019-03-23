@@ -21,6 +21,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *  USA
  *
+ *  $Id: m_message.c 3173 2007-01-31 23:57:18Z jilles $
  */
 
 #include "stdinc.h"
@@ -29,6 +30,7 @@
 #include "numeric.h"
 #include "common.h"
 #include "s_conf.h"
+#include "s_user.h"
 #include "s_serv.h"
 #include "msg.h"
 #include "parse.h"
@@ -44,7 +46,6 @@
 #include "s_stats.h"
 #include "tgchange.h"
 #include "inline/stringops.h"
-#include "irc_dictionary.h"
 
 static int m_message(int, const char *, struct Client *, struct Client *, int, const char **);
 static int m_privmsg(struct Client *, struct Client *, int, const char **);
@@ -254,7 +255,7 @@ static int
 build_target_list(int p_or_n, const char *command, struct Client *client_p,
 		  struct Client *source_p, const char *nicks_channels, const char *text)
 {
-	int type;
+	int type, exists;
 	char *p, *nick, *target_list;
 	struct Channel *chptr = NULL;
 	struct Client *target_p;
@@ -270,8 +271,9 @@ build_target_list(int p_or_n, const char *command, struct Client *client_p,
 		 * channels are privmsg'd a lot more than other clients, moved up
 		 * here plain old channel msg?
 		 */
+		exists = 0;
 
-		if(IsChanPrefix(*nick))
+		if(IsChannelName(nick))
 		{
 			/* ignore send of local channel to a server (should not happen) */
 			if(IsServer(client_p) && *nick == '&')
@@ -305,6 +307,24 @@ build_target_list(int p_or_n, const char *command, struct Client *client_p,
 		else
 			target_p = find_person(nick);
 
+		// If not:
+		//  - my client, named person exists, or
+		//  - other client, person exists, or
+		//  - existing channel
+		// and if:
+		//  - we are PRIVMSG
+		// puke a "nosuchnick" error and move along
+		// the channel part should have been handled.
+		if (!(
+			(MyClient(source_p) && find_named_person(nick) != NULL) ||
+			(!MyClient(source_p) && find_person(nick) != NULL) ||
+			(chptr != NULL)
+		) && p_or_n != NOTICE) {
+			sendto_one_numeric(source_p, ERR_NOSUCHNICK,
+					   form_str(ERR_NOSUCHNICK), nick);
+			continue;
+		}
+
 		/* look for a privmsg to another client */
 		if(target_p)
 		{
@@ -330,17 +350,19 @@ build_target_list(int p_or_n, const char *command, struct Client *client_p,
 		/*  allow %+@ if someone wants to do that */
 		for(;;)
 		{
-                       if(*nick == '@')
-                           type |= CHFL_CHANOP | CHFL_ADMIN | CHFL_OWNER;
-                       else if(*nick == '+')
-                           type |= CHFL_CHANOP | CHFL_VOICE | CHFL_HALFOP | CHFL_ADMIN | CHFL_OWNER;
-                       else if(*nick == '%')
-                           type |= CHFL_CHANOP | CHFL_HALFOP | CHFL_ADMIN | CHFL_OWNER;
-                       else if(*nick == '&')
-                           type |= CHFL_ADMIN | CHFL_OWNER;
-                       else if(*nick == '~')
-                       type = CHFL_OWNER;
-                       else
+			if(*nick == '@')
+				type |= CHFL_BOP | CHFL_QOP | CHFL_SOP | CHFL_CHANOP;
+			else if(*nick == '*')
+				type |= CHFL_BOP;
+			else if(*nick == '%')
+				type |= CHFL_BOP | CHFL_QOP | CHFL_SOP | CHFL_CHANOP | CHFL_HALFOP;
+			else if(*nick == '!')
+				type |= CHFL_BOP | CHFL_QOP | CHFL_SOP;
+			else if(*nick == '~')
+				type |= CHFL_BOP | CHFL_QOP;
+			else if(*nick == '+')
+				type |= CHFL_BOP | CHFL_QOP | CHFL_SOP | CHFL_CHANOP | CHFL_HALFOP | CHFL_VOICE;
+			else
 				break;
 			nick++;
 		}
@@ -367,11 +389,26 @@ build_target_list(int p_or_n, const char *command, struct Client *client_p,
 
 				if(!IsServer(source_p) && !IsService(source_p) && !is_chanop_voiced(msptr))
 				{
-					sendto_one(source_p, form_str(ERR_CHANOPRIVSNEEDED),
-						   get_id(&me, source_p),
-						   get_id(source_p, source_p),
-						   with_prefix);
-					return (-1);
+					if(msptr && IsOverride(source_p))
+					{
+						/* Only send a notice for this if we haven't in the last
+						 * three minutes. */
+						if(MyClient(source_p) && rb_current_time() > msptr->override_ts + 300)
+						{
+							msptr->override_ts = rb_current_time();
+							sendto_realops_snomask(SNO_GENERAL, L_NETWIDE,
+									"%s is overriding send to [%s]",
+									get_oper_name(source_p), with_prefix);
+						}
+					}
+					else
+					{
+						sendto_one(source_p, form_str(ERR_CHANOPRIVSNEEDED),
+							   get_id(&me, source_p),
+							   get_id(source_p, source_p),
+							   with_prefix);
+						return (-1);
+					}
 				}
 
 				if(!duplicate_ptr(chptr))
@@ -396,9 +433,9 @@ build_target_list(int p_or_n, const char *command, struct Client *client_p,
 			continue;
 		}
 
-		if(IsServer(client_p) && *nick == '=' && nick[1] == '#')
+		if(IsServer(client_p) && *nick == '=' && IsChannelName((nick + 1)))
 		{
-			nick++;
+			*nick++;
 			if((chptr = find_channel(nick)) != NULL)
 			{
 				if(!duplicate_ptr(chptr))
@@ -427,23 +464,6 @@ build_target_list(int p_or_n, const char *command, struct Client *client_p,
 			handle_special(p_or_n, command, client_p, source_p, nick, text);
 			continue;
 		}
-
-		/* no matching anything found - error if not NOTICE */
-		if(p_or_n != NOTICE)
-		{
-			/* dont give this numeric when source is local,
-			 * because its misleading --anfl
-			 */
-			if(!MyClient(source_p) && IsDigit(*nick))
-				sendto_one(source_p, ":%s %d %s * :Target left IRC. "
-					   "Failed to deliver: [%.20s]",
-					   get_id(&me, source_p), ERR_NOSUCHNICK,
-					   get_id(source_p, source_p), text);
-			else
-				sendto_one_numeric(source_p, ERR_NOSUCHNICK,
-						   form_str(ERR_NOSUCHNICK), nick);
-		}
-
 	}
 	return (1);
 }
@@ -488,11 +508,7 @@ msg_channel(int p_or_n, const char *command,
 {
 	int result;
 	char text2[BUFSIZE];
-	size_t contor;
-	int caps = 0;
-	int len = 0;
-	struct membership *msptr = find_channel_membership(chptr, source_p);
-	struct Metadata *md;
+	struct membership *msptr;
 
 	if(MyClient(source_p))
 	{
@@ -501,53 +517,7 @@ msg_channel(int p_or_n, const char *command,
 			source_p->localClient->last = rb_current_time();
 	}
 
-	if(chptr->mode.mode & MODE_NOREPEAT)
-	{
-		rb_strlcpy(text2, text, BUFSIZE);
-		strip_unprintable(text2);
-		md = channel_metadata_find(chptr, "NOREPEAT");
-		if(md && (!ConfigChannel.exempt_cmode_K || !is_any_op(msptr)))
-		{
-			if(!(strcmp(md->value, text2)))
-			{
-				if(p_or_n != NOTICE)
-					sendto_one_numeric(source_p, 404, "%s :Cannot send to channel - Message blocked due to repeating (+K set)", chptr->chname);
-				return;
-			}
-		}
-		channel_metadata_delete(chptr, "NOREPEAT", 0);
-		channel_metadata_add(chptr, "NOREPEAT", text2, 0);
-	}
-
-    // Must be processed before chmode c --SnoFox
-    if (strlen(text) > 10 && chptr->mode.mode & MODE_NOCAPS && (!ConfigChannel.exempt_cmode_G || !is_any_op(msptr)))
-    {
-        rb_strlcpy(text2, text, BUFSIZE);
-        strip_unprintable(text2);
-
-        // Don't count the "ACTION" part of action as part of the message --SnoFox
-        if (p_or_n != NOTICE && *text == '\001' &&
-                !strncasecmp(text + 1, "ACTION ", 7))
-        {
-            contor = 7;
-        } else {
-            contor = 0;
-        }
-        for(; contor < strlen(text2); contor++)
-        {
-            if(IsUpper(text2[contor]) && !isdigit(text2[contor]))
-                caps++; 
-            len++;
-        }
-        /* Added divide by 0 check --alxbl */
-        if(len != 0 && ((caps*100)/(len)) >= 50)
-        {
-            sendto_one_numeric(source_p, 404, "%s :Cannot send to channel - Your message contains mostly capital letters (+G set)", chptr->chname);
-            return;
-        }
-    }
-
-	if(chptr->mode.mode & MODE_NOCOLOR && (!ConfigChannel.exempt_cmode_c || !is_any_op(msptr)))
+	if(chptr->mode.mode & MODE_NOCOLOR)
 	{
 		rb_strlcpy(text2, text, BUFSIZE);
 		strip_colour(text2);
@@ -562,8 +532,18 @@ msg_channel(int p_or_n, const char *command,
 		}
 	}
 
+	if(chptr->mode.mode & MODE_NONOTICE)
+	{
+		if(p_or_n == NOTICE) {
+			sendto_one_numeric(source_p, ERR_CANNOTSENDTOCHAN, "%s :Cannot send to channel (+T is set)", chptr->chname);
+			return;
+		}
+	}
+
+	msptr = find_channel_membership(chptr, source_p);
+
 	/* chanops and voiced can flood their own channel with impunity */
-	if((result = can_send(chptr, source_p, NULL)))
+	if((result = can_send(chptr, source_p, msptr)))
 	{
 		if(result != CAN_SEND_OPV && MyClient(source_p) &&
 		   !IsOper(source_p) &&
@@ -576,31 +556,60 @@ msg_channel(int p_or_n, const char *command,
 		if(result == CAN_SEND_OPV ||
 		   !flood_attack_channel(p_or_n, source_p, chptr, chptr->chname))
 		{
-			if (p_or_n != PRIVMSG && chptr->mode.mode & MODE_NONOTICE && (!ConfigChannel.exempt_cmode_T || !is_any_op(msptr)))
-			{
-				sendto_one_numeric(source_p, 404, "%s :Cannot send to channel - Notices are disallowed (+T set)", chptr->chname);
-				return;
-			}
-			if (p_or_n != NOTICE && chptr->mode.mode & MODE_NOACTION &&
-					!strncasecmp(text + 1, "ACTION", 6) &&
-					(!ConfigChannel.exempt_cmode_D || !is_any_op(msptr)))
-			{
-				sendto_one_numeric(source_p, 404, "%s :Cannot send to channel - ACTIONs are disallowed (+D set)", chptr->chname);
-				return;
-			}
 			if (p_or_n != NOTICE && *text == '\001' &&
 					strncasecmp(text + 1, "ACTION ", 7))
 			{
-				if (chptr->mode.mode & MODE_NOCTCP && (!ConfigChannel.exempt_cmode_C || !is_any_op(msptr)))
+				if (chptr->mode.mode & MODE_NOCTCP)
 				{
-					sendto_one_numeric(source_p, 404, "%s :Cannot send to channel - CTCPs to this channel are disallowed (+C set)", chptr->chname);
+					sendto_one_numeric(source_p, ERR_CANNOTSENDTOCHAN,
+							   form_str(ERR_CANNOTSENDTOCHAN), chptr->chname);
 					return;
 				}
 				else if (rb_dlink_list_length(&chptr->locmembers) > (unsigned)(GlobalSetOptions.floodcount / 2))
 					source_p->large_ctcp_sent = rb_current_time();
 			}
-			sendto_channel_flags(client_p, ALL_MEMBERS, source_p, chptr,
-					     "%s %s :%s", command, chptr->chname, text);
+
+			if (is_delayed(msptr)) {
+				// User is member of channel. Undelay them if they can speak.
+				msptr->flags &= ~CHFL_DELAYED;
+				send_channel_join(0, chptr, source_p);
+			}
+
+			sendto_channel_message(client_p, ALL_MEMBERS, source_p, chptr,
+					     command, chptr->chname, "%s", text);
+		}
+	}
+	else if (msptr && IsOverride(source_p))
+	{
+		if (!flood_attack_channel(p_or_n, source_p, chptr, chptr->chname))
+		{
+			if(MyClient(source_p) && rb_current_time() > msptr->override_ts + 300)
+			{
+				msptr->override_ts = rb_current_time();
+				sendto_realops_snomask(SNO_GENERAL, L_NETWIDE, "%s is overriding send to %s",
+						get_oper_name(source_p), chptr->chname);
+			}
+			if (p_or_n != NOTICE && *text == '\001')
+			{
+				if (chptr->mode.mode & MODE_NOCTCP &&
+					0 != strncasecmp(text+1, "ACTION", 6))
+				{
+					sendto_one_numeric(source_p, ERR_CANNOTSENDTOCHAN,
+							   form_str(ERR_CANNOTSENDTOCHAN), chptr->chname);
+					return;
+				}
+				else if (rb_dlink_list_length(&chptr->locmembers) > (unsigned)(GlobalSetOptions.floodcount / 2))
+					source_p->large_ctcp_sent = rb_current_time();
+			}
+
+			if (is_delayed(msptr)) {
+				// User is member of channel. Undelay them if they can speak.
+				msptr->flags &= ~CHFL_DELAYED;
+				send_channel_join(0, chptr, source_p);
+			}
+
+			sendto_channel_message(client_p, ALL_MEMBERS, source_p, chptr,
+					command, chptr->chname, "%s", text);
 		}
 	}
 	else if(chptr->mode.mode & MODE_OPMODERATE &&
@@ -616,6 +625,7 @@ msg_channel(int p_or_n, const char *command,
 		}
 		if(!flood_attack_channel(p_or_n, source_p, chptr, chptr->chname))
 		{
+			// Don't undelay them if they're opmodded.
 			sendto_channel_opmod(client_p, source_p, chptr,
 					     command, text);
 		}
@@ -700,6 +710,7 @@ msg_channel_flags(int p_or_n, const char *command, struct Client *client_p,
 {
 	int type;
 	char c;
+	char target[CHANNELLEN+2];
 
 	if(flags & CHFL_VOICE)
 	{
@@ -712,6 +723,9 @@ msg_channel_flags(int p_or_n, const char *command, struct Client *client_p,
 		c = '@';
 	}
 
+	target[0] = c;
+	rb_strlcpy(target+1, chptr->chname, sizeof(target)-1);
+
 	if(MyClient(source_p))
 	{
 		/* idletime shouldnt be reset by notice --fl */
@@ -719,8 +733,7 @@ msg_channel_flags(int p_or_n, const char *command, struct Client *client_p,
 			source_p->localClient->last = rb_current_time();
 	}
 
-	sendto_channel_flags(client_p, type, source_p, chptr, "%s %c%s :%s",
-			     command, c, chptr->chname, text);
+	sendto_channel_message(client_p, type, source_p, chptr, command, target, "%s", text);
 }
 
 static void
@@ -743,6 +756,42 @@ expire_tgchange(void *unused)
 	}
 }
 
+static int
+can_msg_ssl_client (int p_or_n, struct Client *source_p, struct Client *target_p)
+{
+	int canmsg = 0;
+
+	// First, check whether target_p accepts source_p.
+	if (accept_message(source_p, target_p)) return 1; //no need to set
+	// that they can message; just return 1
+
+	// check that the target is -t, or that the source is using SSL
+	// a module providing umode +t must be available for this not
+	// to always go to "yes"
+	if ( ((target_p->umodes & user_modes['t']) != 0x0) ) {
+		if (IsSSLClient(source_p)) canmsg = 1;
+		// he can probably message if is ssl
+	} else // we're not the one prohibiting them from sending
+		return 1;
+
+	// well you messaged a cleartext user, so you consented to your msgs
+	// going down a cleartext connection. don't come crying to me.
+	if (!IsSSLClient(target_p) && ((source_p->umodes & user_modes['t']) != 0x0)) {
+		if(rb_dlink_list_length(&source_p->localClient->allow_list) <
+			ConfigFileEntry.max_accept)
+		{
+			rb_dlinkAddAlloc(target_p, &source_p->localClient->allow_list);
+			rb_dlinkAddAlloc(source_p, &target_p->on_allow_list);
+		}
+		else
+		{
+			return 0; // no they can't
+		}
+	}
+
+	return canmsg; //don't bother
+}
+
 /*
  * msg_client
  *
@@ -760,10 +809,6 @@ msg_client(int p_or_n, const char *command,
 	   struct Client *source_p, struct Client *target_p, const char *text)
 {
 	int do_floodcount = 0;
-	struct Metadata *md;
-	struct DictionaryIter iter;
-	int oaccept = 0;
-	char text3[10];
 
 	if(MyClient(source_p))
 	{
@@ -772,11 +817,15 @@ msg_client(int p_or_n, const char *command,
 		 * through a +g.  Rationale is that people can presently use +g
 		 * as a way to taunt users, e.g. harass them and hide behind +g
 		 * as a way of griefing.  --nenolod
+		 * Resolved. Not controversial. As your enemy, nenolod, I,
+		 * Reinhilde Malik do solemnly declare that it should not
+		 * be possible for one to grief through +g.
+		 * I'm guilty of it myself. Well, Ellie is, but systemic
+		 * responsibility and that ;)
 		 */
-		if(p_or_n != NOTICE && MyClient(source_p) &&
-				IsSetCallerId(source_p) &&
-				IsSetSCallerId(source_p) &&
-				!accept_message(target_p, source_p))
+		if(p_or_n != NOTICE && IsSetCallerId(source_p) &&
+				!accept_message(target_p, source_p) &&
+				!IsAnyOper(target_p))
 		{
 			if(rb_dlink_list_length(&source_p->localClient->allow_list) <
 					ConfigFileEntry.max_accept)
@@ -827,7 +876,7 @@ msg_client(int p_or_n, const char *command,
 	}
 	else if(source_p->from == target_p->from)
 	{
-		sendto_realops_snomask(SNO_DEBUG, L_ALL,
+		sendto_realops_snomask(SNO_DEBUG, L_NETWIDE,
 				     "Send message to %s[%s] dropped from %s(Fake Dir)",
 				     target_p->name, target_p->from->name, source_p->name);
 		return;
@@ -839,40 +888,45 @@ msg_client(int p_or_n, const char *command,
 
 	if(MyClient(target_p))
 	{
-		if (IsSetNoCTCP(target_p) && p_or_n != NOTICE && *text == '\001' && strncasecmp(text + 1, "ACTION", 6))
+		/* XXX Controversial? allow opers always to send through a +g
+		 * yep, deleted that from this ircd. may import oaccept. */
+		if(!IsServer(source_p) && (IsSetCallerId(target_p) ||
+					((target_p->umodes & user_modes['t']) != 0x0) ||
+					(IsSetRegOnlyMsg(target_p) && !source_p->user->suser[0])))
 		{
-			    sendto_one_numeric(source_p, ERR_NOCTCP,
-			            form_str(ERR_NOCTCP),
-			            target_p->name);
-		}
-		/* If opers want to go through +g, they should load oaccept.*/
-		else if(!IsServer(source_p) && !IsService(source_p) && (IsSetCallerId(target_p) ||
-					(IsSetSCallerId(target_p) && !has_common_channel(source_p, target_p)) ||
-                                        (IsSetRegOnlyMsg(target_p) && !source_p->user->suser[0]) ||
-                                        (IsSetStaffOnlyMsg(target_p) && !IsOper(source_p)) ||
-                        (IsSetSslOnlyMsg(target_p) && !IsSSLClient(source_p)))
-			)
-		{
-			if (IsOper(source_p))
-			{
-				rb_snprintf(text3, sizeof(text3), "O%s", source_p->id);
-				DICTIONARY_FOREACH(md, &iter, target_p->user->metadata)
-				{
-					if(!strcmp(md->value, "OACCEPT") && !strcmp(md->name, text3))
-					{
-						oaccept = 1;
-						break;
-					}
-				}
-			}
 			/* Here is the anti-flood bot/spambot code -db */
-			if(accept_message(source_p, target_p) || oaccept)
+			if(accept_message(source_p, target_p))
 			{
 				add_reply_target(target_p, source_p);
-				sendto_one(target_p, ":%s!%s@%s %s %s :%s",
-					   source_p->name,
-					   source_p->username,
-					   source_p->host, command, target_p->name, text);
+				sendto_anywhere_message(target_p, source_p, command, "%s", text);
+			}
+			else if ((target_p->umodes & user_modes['t']) != 0x0)
+			{	// is the source SSL? if so, send it!
+				if (IsSSLClient(source_p)) sendto_anywhere_message(target_p, source_p, command, "%s", text);
+				else {
+					if(p_or_n != NOTICE)
+					{
+						sendto_one_numeric(source_p, ERR_TARGUMODEG,
+								   "%s :is in caller identification for non-SSL users, and you are not using SSL.",
+								   target_p->name);
+					}
+
+					if((target_p->localClient->last_caller_id_time +
+					    ConfigFileEntry.caller_id_wait) < rb_current_time())
+					{
+						if(p_or_n != NOTICE)
+							sendto_one_numeric(source_p, RPL_TARGNOTIFY,
+									   form_str(RPL_TARGNOTIFY),
+									   target_p->name);
+
+						add_reply_target(target_p, source_p);
+						sendto_one(target_p, ":%s 718 %s %s %s@%s :is trying to message you, but you are set +t. They aren't using SSL/TLS. To allow breakthrough, /accept %s",
+							   me.name, target_p->name, source_p->name,
+							   source_p->username, source_p->host, source_p->name);
+
+						target_p->localClient->last_caller_id_time = rb_current_time();
+					}
+				}
 			}
 			else if (IsSetRegOnlyMsg(target_p) && !source_p->user->suser[0])
 			{
@@ -880,45 +934,6 @@ msg_client(int p_or_n, const char *command,
 					sendto_one_numeric(source_p, ERR_NONONREG,
 							form_str(ERR_NONONREG),
 							target_p->name);
-			}
-			else if (IsSetSslOnlyMsg(target_p) && !IsSSLClient(source_p))
-			{
-				if (p_or_n != NOTICE)
-                                {       sendto_one(source_p, ":%s!%s@%s PRIVMSG %s :You must be connected using SSL/TLS to message me, please send this message again once connected via SSL/TLS",
-                                                   target_p->name, target_p->username, target_p->host, source_p->name); }
-			}
-                        else if (IsSetStaffOnlyMsg(target_p) && !IsOper(source_p))
-                        {
-                                if (p_or_n != NOTICE)
-                                        sendto_one_numeric(source_p, ERR_NONONOP,
-                                                        form_str(ERR_NONONOP),
-                                                        target_p->name);
-                        }
-			else if (IsSetSCallerId(target_p) && !has_common_channel(source_p, target_p))
-			{
-				if (p_or_n != NOTICE)
-				{	sendto_one_numeric(source_p, ERR_NOCOMMONCHAN,
-							form_str(ERR_NOCOMMONCHAN),
-							target_p->name);
-					sendto_one(source_p, ":%s!%s@%s PRIVMSG %s :I am using usermode +G, a variant of +g that allows users on the same channels as I to message me. You are not in any common channels with me. Please stand by for confirmation.",
-						   target_p->name, target_p->username, target_p->host, source_p->name); }
-				if((target_p->localClient->last_caller_id_time +
-				    ConfigFileEntry.caller_id_wait) < rb_current_time())
-				{
-					if(p_or_n != NOTICE)
-						sendto_one_numeric(source_p, RPL_TARGNOTIFY,
-								   form_str(RPL_TARGNOTIFY),
-								   target_p->name);
-
-					add_reply_target(target_p, source_p);
-					sendto_one(target_p, form_str(RPL_UMODEGMSG),
-						   me.name, target_p->name, source_p->name,
-						   source_p->username, source_p->host);
-					sendto_one(target_p, ":%s!%s@%s NOTICE %s :I am messaging you, and you are in caller-ID except-common-channels secure query mode (+G). If you would like to talk to me, please /ACCEPT %s",
-						   source_p->name, source_p->username, source_p->host, target_p->name, source_p->name);
-
-					target_p->localClient->last_caller_id_time = rb_current_time();
-				}
 			}
 			else
 			{
@@ -928,8 +943,6 @@ msg_client(int p_or_n, const char *command,
 					sendto_one_numeric(source_p, ERR_TARGUMODEG,
 							   form_str(ERR_TARGUMODEG),
 							   target_p->name);
-					sendto_one(source_p, ":%s!%s@%s PRIVMSG %s :I am using usermode +g, a server-side secure-queries event system invented by the IRCd-Hybrid developers. Please stand by for confirmation.",
-						   target_p->name, target_p->username, target_p->host, source_p->name);
 				}
 
 				if((target_p->localClient->last_caller_id_time +
@@ -943,9 +956,7 @@ msg_client(int p_or_n, const char *command,
 					add_reply_target(target_p, source_p);
 					sendto_one(target_p, form_str(RPL_UMODEGMSG),
 						   me.name, target_p->name, source_p->name,
-						   source_p->username, source_p->host);
-					sendto_one(target_p, ":%s!%s@%s NOTICE %s :I am messaging you, and you are in caller-ID secure query mode (+g). If you would like to talk to me, please /ACCEPT %s",
-						   source_p->name, source_p->username, source_p->host, target_p->name, source_p->name);
+						   source_p->username, source_p->host, source_p->name);
 
 					target_p->localClient->last_caller_id_time = rb_current_time();
 				}
@@ -954,7 +965,7 @@ msg_client(int p_or_n, const char *command,
 		else
 		{
 			add_reply_target(target_p, source_p);
-			sendto_anywhere(target_p, source_p, command, ":%s", text);
+			sendto_anywhere_message(target_p, source_p, command, "%s", text);
 		}
 	}
 	else
@@ -982,7 +993,7 @@ flood_attack_client(int p_or_n, struct Client *source_p, struct Client *target_p
 	 * and msg user@server.
 	 * -- jilles
 	 */
-	if(GlobalSetOptions.floodcount && IsClient(source_p) && source_p != target_p && !IsService(target_p) && (!IsOper(source_p) || !ConfigFileEntry.true_no_oper_flood))
+	if(GlobalSetOptions.floodcount && IsClient(source_p) && source_p != target_p && !IsService(target_p))
 	{
 		if((target_p->first_received_message_time + 1) < rb_current_time())
 		{
@@ -1045,7 +1056,6 @@ handle_special(int p_or_n, const char *command, struct Client *client_p,
 {
 	struct Client *target_p;
 	char *server;
-	char *s;
 
 	/* user[%host]@server addressed?
 	 * NOTE: users can send to user@server, but not user%host@server
@@ -1118,23 +1128,7 @@ handle_special(int p_or_n, const char *command, struct Client *client_p,
 		if(MyClient(source_p) && !IsOperMassNotice(source_p))
 		{
 			sendto_one(source_p, form_str(ERR_NOPRIVS),
-				   me.name, source_p->name, "mass_notice");
-			return;
-		}
-
-		if((s = strrchr(nick, '.')) == NULL)
-		{
-			sendto_one_numeric(source_p, ERR_NOTOPLEVEL,
-					   form_str(ERR_NOTOPLEVEL), nick);
-			return;
-		}
-		while(*++s)
-			if(*s == '.' || *s == '*' || *s == '?')
-				break;
-		if(*s == '*' || *s == '?')
-		{
-			sendto_one_numeric(source_p, ERR_WILDTOPLEVEL,
-					   form_str(ERR_WILDTOPLEVEL), nick);
+				   me.name, source_p->name, "massnotice");
 			return;
 		}
 

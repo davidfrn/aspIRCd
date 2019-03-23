@@ -29,6 +29,7 @@
  * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
+ * $Id: s_newconf.h 1747 2006-07-25 21:22:45Z jilles $
  */
 
 #ifndef INCLUDED_s_newconf_h
@@ -81,27 +82,32 @@ struct remote_conf
 };
 
 /* flags used in shared/cluster */
-#define SHARED_TKLINE	0x0001
-#define SHARED_PKLINE	0x0002
-#define SHARED_UNKLINE	0x0004
-#define SHARED_LOCOPS	0x0008
-#define SHARED_TXLINE	0x0010
-#define SHARED_PXLINE	0x0020
-#define SHARED_UNXLINE	0x0040
-#define SHARED_TRESV	0x0080
-#define SHARED_PRESV	0x0100
-#define SHARED_UNRESV	0x0200
-#define SHARED_REHASH	0x0400
-#define SHARED_TDLINE	0x0800
-#define SHARED_PDLINE	0x1000
-#define SHARED_UNDLINE	0x2000
-#define SHARED_DIE      0x4000
-#define SHARED_MODULE	0x8000
+#define SHARED_TKLINE	0x00001
+#define SHARED_PKLINE	0x00002
+#define SHARED_UNKLINE	0x00004
+#define SHARED_LOCOPS	0x00008
+#define SHARED_TXLINE	0x00010
+#define SHARED_PXLINE	0x00020
+#define SHARED_UNXLINE	0x00040
+#define SHARED_TRESV	0x00080
+#define SHARED_PRESV	0x00100
+#define SHARED_UNRESV	0x00200
+#define SHARED_REHASH	0x00400
+#define SHARED_TDLINE	0x00800
+#define SHARED_PDLINE	0x01000
+#define SHARED_UNDLINE	0x02000
+#define SHARED_GRANT	0x04000
+#define SHARED_DIE	0x08000
+#define SHARED_MODULE	0x10000
 
 #define SHARED_ALL	(SHARED_TKLINE | SHARED_PKLINE | SHARED_UNKLINE |\
 			SHARED_PXLINE | SHARED_TXLINE | SHARED_UNXLINE |\
-			SHARED_TRESV | SHARED_PRESV | SHARED_UNRESV | SHARED_REHASH)
-#define CLUSTER_ALL	(SHARED_ALL | SHARED_LOCOPS)
+			SHARED_TRESV | SHARED_PRESV | SHARED_UNRESV |\
+			SHARED_TDLINE | SHARED_PDLINE | SHARED_UNDLINE)
+#define CLUSTER_ALL	(SHARED_TKLINE | SHARED_PKLINE | SHARED_UNKLINE |\
+			SHARED_PXLINE | SHARED_TXLINE | SHARED_UNXLINE |\
+			SHARED_TRESV | SHARED_PRESV | SHARED_UNRESV |\
+			SHARED_LOCOPS)
 
 /* flags used in hub/leaf */
 #define CONF_HUB	0x0001
@@ -114,15 +120,15 @@ struct oper_conf
 	char *host;
 	char *passwd;
 	char *certfp;
+	char *vhost;
+	char *operstring;
+	char *swhois;
 
 	int flags;
 	int umodes;
+	int flood_multiplier;
 
 	unsigned int snomask;
-
-	char *vhost;
-	char *swhois;
-	char *operstring;
 
 	struct PrivilegeSet *privset;
 
@@ -143,45 +149,58 @@ extern void cluster_generic(struct Client *, const char *, int cltype,
 			int cap, const char *format, ...);
 
 #define OPER_ENCRYPTED	0x00001
-#define OPER_VHOSTAUTH	0x00002
-#define OPER_NEEDSSL    0x80000
-/* 0x400000 and above are in client.h */
+#define OPER_NEEDSSL    0x00002
 
 #define OPER_FLAGS	0 /* no oper privs in Client.flags2/oper_conf.flags currently */
 
 #define IsOperConfEncrypted(x)	((x)->flags & OPER_ENCRYPTED)
 #define IsOperConfNeedSSL(x)	((x)->flags & OPER_NEEDSSL)
-#define IsOperConfVHostAuth(x)	((x)->flags & OPER_VHOSTAUTH)
 
 #define HasPrivilege(x, y)	((x)->localClient != NULL && (x)->localClient->privset != NULL && privilegeset_in_set((x)->localClient->privset, (y)))
 
-#define IsOperGlobalKill(x)     (HasPrivilege((x), "oper:global_kill"))
-#define IsOperLocalKill(x)      (HasPrivilege((x), "oper:local_kill"))
-#define IsOperRemote(x)         (HasPrivilege((x), "oper:routing"))
-#define IsOperUnkline(x)        (HasPrivilege((x), "oper:unkline"))
-#define IsOperN(x)              (HasPrivilege((x), "snomask:nick_changes"))
-#define IsOperK(x)              (HasPrivilege((x), "oper:kline"))
-#define IsOperXline(x)          (HasPrivilege((x), "oper:xline"))
-#define IsOperResv(x)           (HasPrivilege((x), "oper:resv"))
-#define IsOperDie(x)            (HasPrivilege((x), "oper:die"))
-#define IsOperRehash(x)         (HasPrivilege((x), "oper:rehash"))
-#define IsOperHiddenAdmin(x)    (HasPrivilege((x), "oper:hidden_admin"))
-#define IsOperAdmin(x)          (HasPrivilege((x), "oper:admin") || HasPrivilege((x), "oper:hidden_admin"))
-#define IsOperOperwall(x)       (HasPrivilege((x), "oper:operwall"))
-#define IsOperSpy(x)            (HasPrivilege((x), "oper:spy"))
-#define IsOperOverride(x)       (HasPrivilege((x), "oper:override"))
-#define IsOperInvis(x)          (HasPrivilege((x), "oper:hidden"))
-#define IsOperRemoteBan(x)	(HasPrivilege((x), "oper:remoteban"))
-#define IsOperMassNotice(x)	(HasPrivilege((x), "oper:mass_notice"))
+#define IsOperHelper(x)         HasPrivilege(x, "oper:helpop")
+#define IsOperDehelper(x)       HasPrivilege(x, "oper:dehelper")
+#define IsOperOperwall(x)       HasPrivilege(x, "oper:operwall")
+#define IsOperStaffer(x)        HasPrivilege(x, "oper:staffer")
+#define IsOperKill(x)           HasPrivilege(x, "oper:kill")
+#define IsOperKline(x)          HasPrivilege(x, "oper:kline")
+#define IsOperUnkline(x)        HasPrivilege(x, "oper:unkline")
+#define IsOperRehash(x)         HasPrivilege(x, "oper:rehash")
+#define IsOperAuspex(x)         HasPrivilege(x, "oper:auspex")
+#define IsOperCModes(x)         HasPrivilege(x, "oper:cmodes")
+#define IsOperOverride(x)       HasPrivilege(x, "oper:override")
+#define IsOperMassNotice(x)     HasPrivilege(x, "oper:massnotice")
+#define IsOperRouting(x)        HasPrivilege(x, "oper:routing")
+#define IsOperXline(x)          HasPrivilege(x, "oper:xline")
+#define IsOperResv(x)           HasPrivilege(x, "oper:resv")
+#define IsOperRemoteBan(x)      HasPrivilege(x, "oper:remoteban")
+#define IsOperAdmin(x)          HasPrivilege(x, "oper:admin")
+#define IsOperNetAdmin(x)       HasPrivilege(x, "oper:netadmin")
+#define IsOperDie(x)            HasPrivilege(x, "oper:die")
+#define IsOperGrant(x)          HasPrivilege(x, "oper:grant")
 
 extern struct oper_conf *make_oper_conf(void);
 extern void free_oper_conf(struct oper_conf *);
 extern void clear_oper_conf(void);
 
-extern struct oper_conf *find_oper_conf(const char *username, const char *host, const char *vhost,
- 					const char *locip, const char *oname);
+extern struct oper_conf *find_oper_conf(const char *username, const char *host,
+					const char *locip, const char *oname);
 
 extern const char *get_oper_privs(int flags);
+
+struct mode_table
+{
+	const char *name;
+	int mode;
+};
+
+struct oper_flags
+{
+	int flag;
+	const char *name;
+	char has;
+	char hasnt;
+};
 
 struct server_conf
 {
@@ -210,6 +229,7 @@ struct server_conf
 #define SERVER_TB		0x0010
 #define SERVER_AUTOCONN		0x0020
 #define SERVER_SSL		0x0040
+#define SERVER_SCTP		0x0080
 
 #define ServerConfIllegal(x)	((x)->flags & SERVER_ILLEGAL)
 #define ServerConfVhosted(x)	((x)->flags & SERVER_VHOSTED)
@@ -218,6 +238,7 @@ struct server_conf
 #define ServerConfTb(x)		((x)->flags & SERVER_TB)
 #define ServerConfAutoconn(x)	((x)->flags & SERVER_AUTOCONN)
 #define ServerConfSSL(x)	((x)->flags & SERVER_SSL)
+#define ServerConfSCTP(x)	((x)->flags & SERVER_SCTP)
 
 extern struct server_conf *make_server_conf(void);
 extern void free_server_conf(struct server_conf *);

@@ -1,9 +1,10 @@
+/* $Id: cache.h 24250 2007-08-22 19:15:08Z androsyn $ */
 #ifndef INCLUDED_CACHE_H
 #define INCLUDED_CACHE_H
 
 #define HELP_MAX	100
 
-#define CACHELINELEN	162
+#define CACHELINELEN	81
 #define CACHEFILELEN	30
 /* two servernames, a gecos, three spaces, ":1", '\0' */
 #define LINKSLINELEN	(HOSTLEN + HOSTLEN + REALLEN + 6)
@@ -28,6 +29,7 @@ struct cacheline
 
 extern struct cachefile *user_motd;
 extern struct cachefile *oper_motd;
+extern struct cachefile *user_smotd;
 extern struct cachefile *user_rules;
 extern struct cacheline *emptyline;
 
@@ -43,9 +45,11 @@ void load_help(void);
 
 void send_user_motd(struct Client *);
 void send_user_rules(struct Client *);
+void send_short_motd(struct Client *);
 void send_oper_motd(struct Client *);
 void cache_user_motd(void);
 void cache_user_rules(void);
+void cache_short_motd(void);
 
 struct Dictionary;
 extern struct Dictionary *help_dict_oper;

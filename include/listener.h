@@ -21,6 +21,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *  USA
  *
+ *  $Id: listener.h 6 2005-09-10 01:02:21Z nenolod $
  */
 
 #ifndef INCLUDED_listener_h
@@ -38,13 +39,14 @@ struct Listener
 	int ref_count;		/* number of connection references */
 	int active;		/* current state of listener */
 	int ssl;		/* ssl listener */
-	int defer_accept;       /* use TCP_DEFER_ACCEPT */
 	struct rb_sockaddr_storage addr;
 	struct DNSQuery *dns_query;
 	char vhost[HOSTLEN + 1];	/* virtual name of listener */
+	int protonum; /* TCP/SCTP */
 };
 
-extern void add_listener(int port, const char *vaddr_ip, int family, int ssl, int defer_accept);
+extern void add_listener(int port, const char *vaddr_ip, int family, int ssl);
+extern void add_sctp_listener(int port, const char *vaddr_ip, int family, int ssl);
 extern void close_listener(struct Listener *listener);
 extern void close_listeners(void);
 extern const char *get_listener_name(const struct Listener *listener);

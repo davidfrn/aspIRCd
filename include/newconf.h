@@ -1,5 +1,6 @@
 /* This code is in the public domain.
  * $Nightmare: nightmare/include/config.h,v 1.32.2.2.2.2 2002/07/02 03:41:28 ejb Exp $
+ * $Id: newconf.h 1735 2006-07-19 02:35:40Z nenolod $
  */
 
 #ifndef _NEWCONF_H_INCLUDED
@@ -24,27 +25,19 @@ struct TopConf
 };
 
 
-#define CF_QSTRING	0x01 /* quoted string */
+#define CF_QSTRING	0x01
 #define CF_INT		0x02
-#define CF_STRING	0x03 /* unquoted string */
+#define CF_STRING	0x03
 #define CF_TIME		0x04
 #define CF_YESNO	0x05
+#define CF_LIST		0x06
+#define CF_ONE		0x07
 
-#define CF_MTYPE	0xFF /* mask for type */
+#define CF_MTYPE	0xFF
 
-/* CF_FLIST is used to allow specifying that an option accepts a list of (type)
- * values. conf_parm_t.type will never actually have another type & CF_FLIST;
- * it's only used as a true flag in newconf.c (which only consumes conf_parm_t
- * structures and doesn't create them itself).
- */
-#define CF_FLIST	0x0100 /* flag for list */
-#define CF_MFLAG	0xFF00 /* mask for flags */
+#define CF_FLIST	0x1000
+#define CF_MFLAG	0xFF00
 
-/* conf_parm_t.type must be either one type OR one flag. this is pretty easy to
- * enforce because lists always contain nested conf_parm_t structures whose
- * .type is the real type, so it doesn't need to be stored in the top-level one
- * anyway.
- */
 typedef struct conf_parm_t_stru
 {
 	struct conf_parm_t_stru *next;
@@ -66,7 +59,7 @@ extern char *current_file;
 int read_config(char *);
 int conf_start_block(char *, char *);
 int conf_end_block(struct TopConf *);
-int conf_call_set(struct TopConf *, char *, conf_parm_t *);
+int conf_call_set(struct TopConf *, char *, conf_parm_t *, int);
 void conf_report_error(const char *, ...);
 void newconf_init(void);
 int add_conf_item(const char *topconf, const char *name, int type, void (*func) (void *));

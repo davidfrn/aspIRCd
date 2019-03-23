@@ -22,12 +22,8 @@ exec_prefix     = @exec_prefix@
 bindir          = @bindir@
 libdir		= @libdir@
 libexecdir      = @libexecdir@
-pkglibexecdir   = @pkglibexecdir@
-sysconfdir	= @sysconfdir@
+confdir         = @confdir@
 localstatedir   = @localstatedir@
-PACKAGE_TARNAME = @PACKAGE_TARNAME@
-
-PROGRAM_PREFIX   = @PROGRAM_PREFIX@
 
 ZIP_LIB		= @ZLIB_LD@
 
@@ -36,8 +32,7 @@ IRCDLIBS	= @MODULES_LIBS@ -L../libratbox/src/.libs -lratbox @LIBS@ $(SSL_LIBS) $
 INCLUDES        = -I. -I../include -I../libratbox/include $(SSL_INCLUDES)
 CPPFLAGS        = ${INCLUDES} @CPPFLAGS@
 
-pkglibexec_PROGS = ssld
-PROGS		= $(pkglibexec_PROGS)
+PROGS		= ssld
 
 SOURCES =     \
   ssld.c
@@ -52,27 +47,14 @@ build: all
 ssld: ${OBJECTS}
 	${CC} ${CFLAGS} ${LDFLAGS} -o $@ ${OBJECTS} ${IRCDLIBS}
 
-install-mkdirs:
-	-@for dir in '$(bindir)' '$(pkglibexecdir)'; do \
-		if test ! -d '$(DESTDIR)'"$${dir}"; then \
-			mkdir -p -m 755 '$(DESTDIR)'"$${dir}"; \
-		fi; \
-	done
-
-install: install-mkdirs build
+install: build
 	@echo "ircd: installing ssld ($(PROGS))"
-	@for i in $(bin_PROGS); do \
+	@for i in $(PROGS); do \
                 if test -f $(DESTDIR)$(bindir)/$$i; then \
-                        $(MV) $(DESTDIR)$(bindir)/$(PROGRAM_PREFIX)$$i $(DESTDIR)$(bindir)/$(PROGRAM_PREFIX)$$i.old; \
+                        $(MV) $(DESTDIR)$(bindir)/$$i $(DESTDIR)$(bindir)/$$i.old; \
                 fi; \
-                $(INSTALL_BIN) $$i $(DESTDIR)$(bindir)/$(PROGRAM_PREFIX)$$i; \
+                $(INSTALL_BIN) $$i $(DESTDIR)$(bindir); \
         done
-	@for i in $(pkglibexec_PROGS); do \
-		if test -f '$(DESTDIR)$(pkglibexecdir)/'$$i; then \
-			$(MV) '$(DESTDIR)$(pkglibexecdir)/'$$i '$(DESTDIR)$(pkglibexecdir)/'$$i.old; \
-		fi; \
-		$(INSTALL_BIN) $$i '$(DESTDIR)$(pkglibexecdir)/'$$i; \
-	done
 
 .c.o:
 	${CC} ${CPPFLAGS} ${CFLAGS} -c $<

@@ -21,6 +21,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *  USA
  *
+ *  $Id: defaults.h 3354 2007-04-03 09:21:31Z nenolod $
  */
 
 #ifndef INCLUDED_defaults_h
@@ -47,14 +48,14 @@
 #define TS_WARN_DELTA_DEFAULT 30	/* default for ts_warn_delta */
 /* ServerInfo default values */
 #define NETWORK_NAME_DEFAULT "EFnet"	/* default for network_name */
-#define SERVER_NAME_MASK_DEFAULT "*.example.net" /*The mask that you want to show in place of servers actual name opers can see actual servers */
+#define NETWORK_DESC_DEFAULT "Eris Free Network"	/* default for network_desc */
 /* General defaults */
 #define CLIENT_FLOOD_DEFAULT 20	/* default for client_flood */
 #define CLIENT_FLOOD_MAX     2000
 #define CLIENT_FLOOD_MIN     10
 #define LINKS_DELAY_DEFAULT  300
 #define MAX_TARGETS_DEFAULT 4	/* default for max_targets */
-#define IDENT_TIMEOUT 5
+#define IDENT_TIMEOUT 10
 #define MIN_JOIN_LEAVE_TIME  60
 #define MAX_JOIN_LEAVE_COUNT  25
 #define OPER_SPAM_COUNTDOWN   5

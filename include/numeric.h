@@ -21,6 +21,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *  USA
  *
+ *  $Id: numeric.h 1793 2006-08-04 19:56:03Z jilles $
  */
 
 #ifndef INCLUDED_numeric_h
@@ -40,6 +41,8 @@ extern const char *form_str(int);
  * from another server then it is remapped to 100-199. -avalon
  */
 #define RPL_WELCOME          001
+#define RPL_STARTTLS         670 /* ircv3.atheme.org tls-3.1 */
+#define ERR_STARTTLS         691 /* ircv3.atheme.org tls-3.2 */
 #define RPL_YOURHOST         002
 #define RPL_CREATED          003
 #define RPL_MYINFO           004
@@ -51,7 +54,6 @@ extern const char *form_str(int);
 #define RPL_MAP		     15	/* Undernet extension */
 #define RPL_MAPMORE	     16	/* Undernet extension */
 #define RPL_MAPEND	     17	/* Undernet extension */
-#define RPL_YOURID           42 /* From ircnet */
 #define RPL_SAVENICK         43 /* From ircnet */
 
 /*
@@ -87,7 +89,9 @@ extern const char *form_str(int);
 
 #define RPL_STATSFLINE       224
 #define RPL_STATSDLINE       225
-#define RPL_RULES            232
+
+#define RPL_RULES            232 // Unreal
+
 #define RPL_SERVLIST         234
 #define RPL_SERVLISTEND      235
 
@@ -135,6 +139,9 @@ extern const char *form_str(int);
 #define RPL_UNAWAY           305
 #define RPL_NOWAWAY          306
 
+#define RPL_ENDOFRULES       308 // Unreal
+#define RPL_RULESSTART       309 // Unreal
+
 /*      RPL_WHOISADMIN       308 -- hybrid */
 
 #define RPL_WHOISUSER        311
@@ -150,6 +157,7 @@ extern const char *form_str(int);
 
 #define RPL_ENDOFWHOIS       318
 #define RPL_WHOISCHANNELS    319
+#define RPL_WHOISSPECIAL     320
 
 #define RPL_LISTSTART        321
 #define RPL_LIST             322
@@ -165,9 +173,6 @@ extern const char *form_str(int);
 #define RPL_NOTOPIC          331
 #define RPL_TOPIC            332
 #define RPL_TOPICWHOTIME     333
-
-#define RPL_WHOISBOT	     335
-
 #define RPL_WHOISACTUALLY    338
 
 #define RPL_INVITING         341
@@ -184,6 +189,7 @@ extern const char *form_str(int);
 #define RPL_WHOSPCRPL        354 /* from ircu -- jilles */
 #define RPL_ENDOFWHO         315
 #define RPL_NAMREPLY         353
+#define RPL_DELNAMREPLY         355
 #define RPL_WHOWASREAL       360
 #define RPL_ENDOFNAMES       366
 
@@ -204,8 +210,6 @@ extern const char *form_str(int);
 #define RPL_MOTDSTART        375
 #define RPL_ENDOFMOTD        376
 #define RPL_WHOISHOST        378
-
-#define RPL_WHOISMODES	     379
 
 #define RPL_YOUREOPER        381
 #define RPL_REHASHING        382
@@ -250,7 +254,7 @@ extern const char *form_str(int);
 #define ERR_NONICKNAMEGIVEN  431
 #define ERR_ERRONEUSNICKNAME 432
 #define ERR_NICKNAMEINUSE    433
-#define ERR_NORULES          434
+#define ERR_NORULES          434 // Unreal
 #define ERR_BANNICKCHANGE    435	/* bahamut's ERR_BANONCHAN -- jilles */
 #define ERR_NICKCOLLISION    436
 #define ERR_UNAVAILRESOURCE  437
@@ -263,10 +267,6 @@ extern const char *form_str(int);
 #define ERR_NOLOGIN          444
 #define ERR_SUMMONDISABLED   445
 #define ERR_USERSDISABLED    446
-
-#define ERR_NOINVITE	     447
-
-#define ERR_NONICK	     449
 
 #define ERR_NOTREGISTERED    451
 
@@ -281,8 +281,7 @@ extern const char *form_str(int);
 #define ERR_YOUREBANNEDCREEP 465
 #define ERR_YOUWILLBEBANNED  466
 #define ERR_KEYSET           467
-#define ERR_NOOPER           468
-#define ERR_NOSSL            469
+
 #define ERR_LINKCHANNEL      470
 #define ERR_CHANNELISFULL    471
 #define ERR_UNKNOWNMODE      472
@@ -303,16 +302,11 @@ extern const char *form_str(int);
 /* #define ERR_RESTRICTED       484 	- hyb derived, no longer here */
 #define ERR_BANNEDNICK       485
 #define ERR_NONONREG         486 /* bahamut; aka ERR_ACCOUNTONLY asuka -- jilles */
-#define ERR_LINKSOP          487
-#define ERR_MAPOP            488
+
 #define ERR_VOICENEEDED		489
-#define RPL_RULESTART        490
+
 #define ERR_NOOPERHOST       491
 
-#define ERR_NOCTCP	     492
-#define ERR_NONONSSL         493
-#define ERR_KICKNOREJOIN     495
-#define ERR_NONONOP          496
 #define ERR_OWNMODE          494 /* from bahamut -- jilles */
 
 #define ERR_UMODEUNKNOWNFLAG 501
@@ -329,13 +323,10 @@ extern const char *form_str(int);
 
 #define ERR_DISABLED         517 /* from ircu */
 
-#define ERR_NOKICK           519 /* from old shadow */
-
 #define ERR_HELPNOTFOUND     524
 
 #define RPL_WHOISSECURE      671 /* Unreal3.2 --nenolod */
-#define RPL_WHOISWEBIRC      672 /* plexus -- XE */
-#define RPL_WHOISYOURID      674 /* Show EUID in WHOIS */
+
 #define RPL_MODLIST          702
 #define RPL_ENDOFMODLIST     703
 
@@ -380,12 +371,10 @@ extern const char *form_str(int);
 #define RPL_ENDOFMONLIST	733
 #define ERR_MONLISTFULL		734
 
-#define ERR_NOCOMMONCHAN	737
-
 #define RPL_RSACHALLENGE2       740
 #define RPL_ENDOFRSACHALLENGE2  741
 
-#define ERR_MLOCKRESTRICTED     742
+#define ERR_MLOCKRESTRICTED	742
 
 #define RPL_SCANMATCHED		750
 #define RPL_SCANUMODES		751
@@ -399,6 +388,7 @@ extern const char *form_str(int);
 #define ERR_SASLTOOLONG		905
 #define ERR_SASLABORTED		906
 #define ERR_SASLALREADY		907
+#define RPL_SASLMECHS		908
 
 #define ERR_LAST_ERR_MSG     999
 

@@ -5,15 +5,16 @@ dnl TODO: clean up all the OpenSSL and shared module checking stuff;
 dnl the most major changes have already been made and it looks like
 dnl said functions need to be just about as complex as they already are.
 
-AC_PREREQ(2.60)
+AC_PREREQ(2.57)
 
 dnl Sneaky way to get an Id tag into the configure script
-AC_COPYRIGHT([2018 sIRCd <ryan.blake182 -at- gmail.com>])
+AC_COPYRIGHT([$Id: configure.ac 3516 2007-06-10 16:14:03Z jilles $])
 
-AC_INIT([aspIRCd],[4.0.5])
+AC_INIT([aspIRCd],[5.0.6-devel])
 
-AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_HEADER(include/setup.h)
+
+AC_DEFINE([CHARYBDIS_VERSION], ["charybdis-4"], [Version of charybdis on which this release is based])
 
 AC_PREFIX_DEFAULT($HOME/ircd)
 
@@ -88,9 +89,9 @@ case "$OSNAME" in
         HP-UX*)
 	dnl only do this if we haven't already detected the newer one
 	dnl and we're not already using gcc
-
+	
 		if test "$HPUX" != yes -a "$ac_cv_c_compiler_gnu" = no; then
-        	        AC_MSG_RESULT(assuming old HPUX with its own cc)
+        	        AC_MSG_RESULT(assuming old HPUX with its own cc)  
 			IRC_CFLAGS="$IRC_CFLAGS +e"
 			HPUX=yes
 		else
@@ -226,36 +227,12 @@ if test "$LEX" = ":"; then
 	AC_MSG_ERROR([could not locate a suitable lexical generator, install flex or lex.])
 fi
 
-AC_ARG_ENABLE([fhs-paths],
-	[AS_HELP_STRING([--enable-fhs-paths], [Use more FHS-like pathnames (for packagers).])],
-	[],
-	[dnl detect if the user appears to want --enable-fhs-paths
-	AS_IF([test "$libexecdir" = '${exec_prefix}/libexec' && \
-		test "$localstatedir" = '${prefix}/var' && \
-		test "$libdir" = '${exec_prefix}/lib'],
-		[enable_fhs_paths=no],
-		[enable_fhs_paths=yes])
-	])
 dnl use directory structure of cached as default (hack)
-AS_IF([test "x$enable_fhs_paths" = "xyes"],
-	[dnl Avoid name collisions.
-	pkglibexecdir='${libexecdir}/${PACKAGE_TARNAME}'
-	rundir=${rundir-'${prefix}/run'}
-	pkgrundir='${rundir}/${PACKAGE_TARNAME}'
-	pkglocalstatedir='${localstatedir}/${PACKAGE_TARNAME}'],
-	[libexecdir='${bindir}'
-	pkglibexecdir='${libexecdir}'
-	rundir='${sysconfdir}'
-	pkgrundir='${rundir}'
+if test "$libexecdir" = '${exec_prefix}/libexec' &&
+   test "$localstatedir" = '${prefix}/var'; then
+	libexecdir='${bindir}'
 	localstatedir='${prefix}'
-	pkglocalstatedir='${sysconfdir}'])
-pkglibdir='${libdir}/${PACKAGE_TARNAME}'
-AC_SUBST([pkglibdir])
-AC_SUBST([rundir])
-AC_SUBST([pkglocalstatedir])
-AC_DEFINE_DIR([PKGLOCALSTATEDIR], [pkglocalstatedir], [[Directory in which to store state, such as ban database]])
-AC_SUBST([pkglibexecdir])
-AC_DEFINE_DIR([PKGLIBEXECDIR], [pkglibexecdir], [Directory where binaries the IRCd itself spawns live])
+fi
 
 dnl Checks for header files.
 AC_HEADER_STDC
@@ -324,7 +301,7 @@ gcc_cv_header_string,
 [
 	AC_COMPILE_IFELSE(
 	[#include <string.h>
-	#include <strings.h>],
+	#include <strings.h>], 
 	[gcc_cv_header_string=yes],
 	[gcc_cv_header_string=no])
 ])
@@ -428,15 +405,15 @@ AC_FUNC_ALLOCA
 dnl Specialized functions checks
 dnl ============================
 
-dnl check for nanosleep
+dnl check for nanosleep          
 AC_CHECK_FUNC(nanosleep,,[AC_CHECK_LIB(rt,nanosleep,
                  LIBS="${LIBS} -lrt",
                  [AC_CHECK_LIB(posix4,nanosleep, LIBS="${LIBS} -lposix4"
                  )])])
 if test x$ac_cv_func_nanosleep = xno && test x$ac_cv_lib_posix4_nanosleep = xno  && test x$ac_cv_lib_rt_nanosleep = xno
-then
+then     
          AC_MSG_RESULT("nanosleep not found..using select for delay")
-else
+else     
 	 AC_DEFINE([HAVE_NANOSLEEP], 1, [Define if nanosleep exists])
 fi
 
@@ -524,7 +501,7 @@ if test "$cf_enable_openssl" != no; then
 
 		dnl Work around pmake/gmake conditional incompatibilities
 		AC_SUBST(ENCSPEED, encspeed)
-
+		
 		dnl Do all the HAVE_LIBCRYPTO magic -- and check for ciphers
 		CPPFLAGS="$CPPFLAGS $SSL_LIBS"
 		AC_CHECK_LIB(crypto, RSA_free)
@@ -540,36 +517,20 @@ LIBS="$save_LIBS"
 
 dnl End OpenSSL detection
 
-dnl Check for shared sqlite
-dnl ======================
-AC_ARG_WITH(shared-sqlite,
-AC_HELP_STRING([--with-shared-sqlite],[Use shared sqlite]),
-[shared_sqlite=$withval],[shared_sqlite=no])
-
-if test "$shared_sqlite" = yes; then
-	PKG_CHECK_MODULES(SQLITE, [sqlite3],
-	[
-		shared_sqlite=yes
-	], shared_sqlite=no)
-fi
-
-if test "$shared_sqlite" = no; then
-	SQLITE_SRC="sqlite3.c"
-fi
-
-AC_SUBST(SQLITE_LD, "$SQLITE_LIBS")
-AC_SUBST(SQLITE_INCLUDES, "$SQLITE_CFLAGS")
-AC_SUBST(SQLITE_SRC)
 
 dnl Specialized functions and libraries
 dnl ===================================
+
 AC_ARG_WITH(zlib-path,
 AC_HELP_STRING([--with-zlib-path=DIR],[Path to libz.so for ziplinks support.]),
 [LIBS="$LIBS -L$withval"],)
+
 AC_ARG_ENABLE(zlib,
 AC_HELP_STRING([--disable-zlib],[Disable ziplinks support]),
 [zlib=$enableval],[zlib=yes])
+
 if test "$zlib" = yes; then
+
 AC_CHECK_HEADER(zlib.h, [
 	AC_CHECK_LIB(z, zlibVersion,
 	[
@@ -577,13 +538,14 @@ AC_CHECK_HEADER(zlib.h, [
 		AC_DEFINE(HAVE_LIBZ, 1, [Define to 1 if zlib (-lz) is available.])
 	], zlib=no)
 ], zlib=no)
+
 fi
 
 dnl IO Loop Selection
 dnl =================
 
 AC_ARG_ENABLE(ports, AC_HELP_STRING([--enable-ports],[Force solaris I/O ports subsystem usage.]),
-[ if test $enableval = yes; then
+[ if test $enableval = yes; then 
 	SELECT_TYPE_EXPLICIT="ports"
   else
   	use_ports=no
@@ -591,7 +553,7 @@ AC_ARG_ENABLE(ports, AC_HELP_STRING([--enable-ports],[Force solaris I/O ports su
 ],)
 
 AC_ARG_ENABLE(poll, AC_HELP_STRING([--enable-poll],[Force poll() usage.]),
-[ if test $enableval = yes; then
+[ if test $enableval = yes; then 
 	SELECT_TYPE_EXPLICIT="poll"
   else
   	use_poll=no
@@ -599,15 +561,15 @@ AC_ARG_ENABLE(poll, AC_HELP_STRING([--enable-poll],[Force poll() usage.]),
 ],)
 
 AC_ARG_ENABLE(select, AC_HELP_STRING([--enable-select],[Force select() usage.]),
-[ if test $enableval = yes; then
-	SELECT_TYPE_EXPLICIT="select"
+[ if test $enableval = yes; then 
+	SELECT_TYPE_EXPLICIT="select" 
   else
   	use_select=no
   fi
 ],)
 
 AC_ARG_ENABLE(kqueue, AC_HELP_STRING([--enable-kqueue],[Force kqueue() usage.]),
-[ if test $enableval = yes; then
+[ if test $enableval = yes; then 
 	SELECT_TYPE_EXPLICIT="kqueue"
   else
   	use_kqueue=no
@@ -615,7 +577,7 @@ AC_ARG_ENABLE(kqueue, AC_HELP_STRING([--enable-kqueue],[Force kqueue() usage.]),
 ],)
 
 AC_ARG_ENABLE(epoll, AC_HELP_STRING([--enable-epoll],[Force sys_epoll usage (Linux only).]),
-[ if test $enableval = yes; then
+[ if test $enableval = yes; then 
 	SELECT_TYPE_EXPLICIT="epoll"
 	AC_CHECK_FUNCS(epoll_ctl, [haveepoll=yes], [haveepoll=no])
   else
@@ -624,111 +586,76 @@ AC_ARG_ENABLE(epoll, AC_HELP_STRING([--enable-epoll],[Force sys_epoll usage (Lin
 ],)
 
 dnl **********************************************************************
-dnl Check for --with-confdir [deprecated, use --sysconfdir instead]
+dnl Check for --with-confdir
 dnl **********************************************************************
 
-AC_ARG_WITH([confdir],
-	[AC_HELP_STRING([--with-confdir=DIR],
-	       [Directory to install config files [deprecated, use --sysconfdir instead].])],
-	[ sysconfdir=`echo $withval | sed 's/\/$//'` ],
-	[ confdir='${sysconfdir}' ])
-AC_DEFINE_DIR([ETC_DIR], [sysconfdir], [Prefix where config files are installed.])
+AC_MSG_CHECKING([whether to modify confdir])
+AC_ARG_WITH(confdir, 
+AC_HELP_STRING([--with-confdir=DIR],
+	       [Directory to install config files.]),
+	       [ confdir=`echo $withval | sed 's/\/$//'`
+		 AC_MSG_RESULT(yes)
+		 AC_DEFINE_DIR(ETC_DIR, confdir, [Prefix where config files are installed.])
+		 AC_SUBST_DIR([confdir]) ],
+	       [ confdir='${prefix}/etc'
+		 AC_MSG_RESULT(no)
+	         AC_DEFINE_DIR(ETC_DIR, confdir, [Prefix where config files are installed.])
+	  	 AC_SUBST_DIR([confdir])]
+)
 
 dnl **********************************************************************
 dnl Check for --with-logdir
 dnl **********************************************************************
 
 AC_MSG_CHECKING([whether to modify logdir])
-AC_ARG_WITH(logdir,
+AC_ARG_WITH(logdir, 
 AC_HELP_STRING([--with-logdir=DIR],
 	       [Directory where to write logfiles.]),
 	       [ logdir=`echo $withval | sed 's/\/$//'`
-		 AC_MSG_RESULT(yes)],
-	       [ AS_IF([test "x$enable_fhs_paths" = "xyes"],
-			[logdir='${localstatedir}/log/${PACKAGE_TARNAME}'],
-			[logdir='${prefix}/logs'])
-		 AC_MSG_RESULT(no)])
-AC_DEFINE_DIR([LOG_DIR], [logdir], [Prefix where to write logfiles.])
-AC_SUBST_DIR([logdir])
+		 AC_MSG_RESULT(yes)
+		 AC_DEFINE_DIR(LOG_DIR, logdir, [Prefix where to write logfiles.])
+		 AC_SUBST_DIR([logdir]) ],
+	       [ logdir='${prefix}/logs'
+		 AC_MSG_RESULT(no)
+	         AC_DEFINE_DIR(LOG_DIR, logdir, [Prefix where to write logfiles.])
+	  	 AC_SUBST_DIR([logdir])]
+)
 
 dnl **********************************************************************
 dnl Check for --with-helpdir
 dnl **********************************************************************
 
 AC_MSG_CHECKING([whether to modify helpdir])
-AC_ARG_WITH(helpdir,
+AC_ARG_WITH(helpdir, 
 AC_HELP_STRING([--with-helpdir=DIR],
 	       [Directory to install help files.]),
 	       [ helpdir=`echo $withval | sed 's/\/$//'`
-		 AC_MSG_RESULT(yes) ],
-	       [ AS_IF([test "x$enable_fhs_paths" = "xyes"],
-			[helpdir='${datadir}/${PACKAGE_TARNAME}/help'],
-			[helpdir='${prefix}/help'])
-		 AC_MSG_RESULT(no) ])
-AC_DEFINE_DIR([HELP_DIR], [helpdir], [Prefix where help files are installed.])
-AC_SUBST_DIR([helpdir])
+		 AC_MSG_RESULT(yes)
+		 AC_DEFINE_DIR(HELP_DIR, helpdir, [Prefix where help files are installed.])
+		 AC_SUBST_DIR([helpdir]) ],
+	       [ helpdir='${prefix}/help'
+		 AC_MSG_RESULT(no)
+	         AC_DEFINE_DIR(HELP_DIR, helpdir, [Prefix where help file are installed.])
+	  	 AC_SUBST_DIR([helpdir])]
+)
 
 dnl **********************************************************************
 dnl Check for --with-moduledir
 dnl **********************************************************************
 
 AC_MSG_CHECKING([whether to modify moduledir])
-AC_ARG_WITH(moduledir,
-	[AC_HELP_STRING([--with-moduledir=DIR],
-	       [Directory to install modules.])],
+AC_ARG_WITH(moduledir, 
+AC_HELP_STRING([--with-moduledir=DIR],
+	       [Directory to install modules.]),
 	       [ moduledir=`echo $withval | sed 's/\/$//'`
-		 AC_MSG_RESULT(yes)],
-	       [ AS_IF([test "x$enable_fhs_paths" = "xyes"],
-			[moduledir='${pkglibdir}/modules'],
-			[moduledir='${prefix}/modules'])
+		 AC_MSG_RESULT(yes)
+		 AC_DEFINE_DIR(MODULE_DIR, moduledir, [Prefix where modules are installed.])
+		 AC_SUBST_DIR([moduledir]) ],
+	       [ moduledir='${prefix}/modules'
 		 AC_MSG_RESULT(no)
-		])
-AC_DEFINE_DIR(MODULE_DIR, moduledir, [Prefix where modules are installed.])
-AC_SUBST_DIR([moduledir])
-
-dnl Check for --with-rundir
-
-AC_MSG_CHECKING([whether to modify rundir])
-AC_ARG_WITH([rundir],
-	[AC_HELP_STRING([--with-rundir=DIR],
-		[Directory to use as prefix for pidfile.])],
-	[AC_MSG_RESULT([yes])
-	rundir=`echo $withval | sed 's/\/$//'`],
-	[AC_MSG_RESULT([no])
-	AS_IF([test "x$enable_fhs_paths" = "xyes"],
-		[rundir='${prefix}/run'],
-		[rundir='${sysconfdir}'])])
-
-dnl **********************************************************************
-dnl Check for --with-pkgrundir
-dnl **********************************************************************
-
-AC_MSG_CHECKING([whether to modify pkgrundir])
-AC_ARG_WITH([pkgrundir],
-	[AC_HELP_STRING([--with-pkgrundir=DIR],
-		[Directory in which to store pidfile.])],
-	[AC_MSG_RESULT([yes])
-	pkgrundir=`echo $withval | sed 's/\/$//'`],
-	[AC_MSG_RESULT([no])])
-
-AC_SUBST([pkgrundir])
-AC_DEFINE_DIR([PKGRUNDIR], [pkgrundir], [Directory to store pidfile in.])
-
-dnl **********************************************************************
-dnl Check for --with-program-prefix
-dnl **********************************************************************
-
-dnl Installed utility program prefixes (does not affect binaries
-dnl installed into pkglibexecdir)
-AC_MSG_CHECKING([for program prefix])
-AC_ARG_WITH([program-prefix],
-	[AS_HELP_STRING([--with-program-prefix=], [If set, programs installed into PATH will be installed with names prefixed by this prefix.])],
-	[test "x$with_program_prefix" = "xno" && with_program_prefix=],
-	[with_program_prefix=])
-AC_MSG_RESULT(["$with_program_prefix"])
-PROGRAM_PREFIX="$with_program_prefix"
-AC_SUBST([PROGRAM_PREFIX])
-AC_DEFINE_UNQUOTED([PROGRAM_PREFIX], ["$with_program_prefix"], [String with which all programs intended to be in PATH are prefixed.])
+	         AC_DEFINE_DIR(MODULE_DIR, moduledir, [Prefix where modules are installed.])
+	  	 AC_SUBST_DIR([moduledir])]
+)
 
 if test ! -z "$SELECT_TYPE_EXPLICIT"; then
 	SELECT_TYPE="$SELECT_TYPE_EXPLICIT";
@@ -774,7 +701,7 @@ if test ! "x$use_epoll" = "xno"; then
 #include <sys/types.h>
 #include <sys/epoll.h>
 #include <sys/syscall.h>
-#include <unistd.h>
+#include <unistd.h>     
 
 int
 main(int argc, char **argv)
@@ -786,7 +713,7 @@ main(int argc, char **argv)
 }, [AC_MSG_RESULT(yes)
 	    AC_DEFINE(HAVE_EPOLL, 1,
 	        [Define if your system supports the epoll system calls])
-	    SELECT_TYPE="epoll"],
+	    SELECT_TYPE="epoll"], 
 	    AC_MSG_RESULT(no), AC_MSG_RESULT(no))
 		fi
 	fi
@@ -802,14 +729,14 @@ if test "x$ac_cv_header_sys_epoll_h" = "xyes"; then
 #include <sys/types.h>
 #include <sys/epoll.h>
 #include <sys/syscall.h>
-#include <unistd.h>
+#include <unistd.h>     
 
 int
 epoll_create(int size)
 {
         return (syscall(__NR_epoll_create, size));
 }
-
+ 
 int
 main(int argc, char **argv)
 {
@@ -820,7 +747,7 @@ main(int argc, char **argv)
 }, [AC_MSG_RESULT(yes)
     AC_DEFINE(HAVE_EPOLL, 1,
         [Define if your system supports the epoll system calls])
-    SELECT_TYPE="epoll"],
+    SELECT_TYPE="epoll"], 
     AC_MSG_RESULT(no), AC_MSG_RESULT(no))
 	fi
 fi
@@ -893,27 +820,53 @@ if test "$balloc" = no; then
 	AC_DEFINE([NOBALLOC], 1, [Define to 1 if you wish to disable the block allocator.])
 fi
 
-AC_DEFINE([NICKNAMEHISTORYLENGTH], 15000, [Size of the WHOWAS array.])
-AC_DEFINE([CHANNEL_HEAP_SIZE], 8192, [Size of the channel heap.])
-AC_DEFINE([BAN_HEAP_SIZE], 4096, [Size of the ban heap.])
-AC_DEFINE([CLIENT_HEAP_SIZE], 8192, [Size of the client heap.])
-AC_DEFINE([LCLIENT_HEAP_SIZE], 1024, [Size of the local client heap.])
-AC_DEFINE([PCLIENT_HEAP_SIZE], 256, [Size of the pre-client heap.])
-AC_DEFINE([USER_HEAP_SIZE], 8192, [Size of the user heap.])
-AC_DEFINE([DNODE_HEAP_SIZE], 8192, [Size of the dlink_node heap.])
-AC_DEFINE([TOPIC_HEAP_SIZE], 4096, [Size of the topic heap.])
-AC_DEFINE([LINEBUF_HEAP_SIZE], 2048, [Size of the linebuf heap.])
-AC_DEFINE([MEMBER_HEAP_SIZE], 32768, [Sizeof member heap.])
-AC_DEFINE([ND_HEAP_SIZE], 512, [Size of the nick delay heap.])
-AC_DEFINE([CONFITEM_HEAP_SIZE], 256, [Size of the confitem heap.])
-AC_DEFINE([MONITOR_HEAP_SIZE], 1024, [Size of the monitor heap.])
-AC_DEFINE([FD_HEAP_SIZE], 1024, [Size of fd heap.])
-AC_DEFINE([AWAY_HEAP_SIZE], 512, [Size of away heap.])
+AC_ARG_ENABLE(small-net,
+AC_HELP_STRING([--enable-small-net],[Enable small network support.]),
+[small_net=$enableval], [small_net=no])
+
+if test "$small_net" = yes; then
+dnl	AC_DEFINE([HASHSIZE], 4096, [Max number of buckets in hash tables.])
+	AC_DEFINE([NICKNAMEHISTORYLENGTH], 1500, [Size of the WHOWAS array.])
+	AC_DEFINE([CHANNEL_HEAP_SIZE], 256, [Size of the channel heap.])
+	AC_DEFINE([BAN_HEAP_SIZE], 128, [Size of the ban heap.])
+	AC_DEFINE([CLIENT_HEAP_SIZE], 256, [Size of the client heap.])
+	AC_DEFINE([LCLIENT_HEAP_SIZE], 128, [Size of the local client heap.])
+	AC_DEFINE([PCLIENT_HEAP_SIZE], 32, [Size of the pre-client heap.])
+	AC_DEFINE([USER_HEAP_SIZE], 128, [Size of the user heap.])
+	AC_DEFINE([DNODE_HEAP_SIZE], 256, [Size of the dlink_node heap.])
+	AC_DEFINE([TOPIC_HEAP_SIZE], 256, [Size of the topic heap.])
+	AC_DEFINE([LINEBUF_HEAP_SIZE], 128, [Size of the linebuf heap.])
+	AC_DEFINE([MEMBER_HEAP_SIZE], 256, [Sizeof member heap.])
+	AC_DEFINE([ND_HEAP_SIZE], 128, [Size of the nick delay heap.])
+	AC_DEFINE([CONFITEM_HEAP_SIZE], 128, [Size of the confitem heap.])
+	AC_DEFINE([MONITOR_HEAP_SIZE], 128, [Size of the monitor heap.])
+	AC_DEFINE([FD_HEAP_SIZE], 128, [Size of fd heap.])
+	AC_DEFINE([AWAY_HEAP_SIZE], 128, [Size of away heap.])
+else
+dnl These settings are for a large network like efnet..they will use lots of memory
+dnl so enable small net unless you really need this much support
+        AC_DEFINE([NICKNAMEHISTORYLENGTH], 15000, [Size of the WHOWAS array.])
+        AC_DEFINE([CHANNEL_HEAP_SIZE], 8192, [Size of the channel heap.])
+        AC_DEFINE([BAN_HEAP_SIZE], 4096, [Size of the ban heap.])
+        AC_DEFINE([CLIENT_HEAP_SIZE], 8192, [Size of the client heap.])
+        AC_DEFINE([LCLIENT_HEAP_SIZE], 1024, [Size of the local client heap.])
+	AC_DEFINE([PCLIENT_HEAP_SIZE], 256, [Size of the pre-client heap.])
+        AC_DEFINE([USER_HEAP_SIZE], 8192, [Size of the user heap.])
+        AC_DEFINE([DNODE_HEAP_SIZE], 8192, [Size of the dlink_node heap.])
+        AC_DEFINE([TOPIC_HEAP_SIZE], 4096, [Size of the topic heap.])
+        AC_DEFINE([LINEBUF_HEAP_SIZE], 2048, [Size of the linebuf heap.])
+        AC_DEFINE([MEMBER_HEAP_SIZE], 32768, [Sizeof member heap.])
+        AC_DEFINE([ND_HEAP_SIZE], 512, [Size of the nick delay heap.])
+        AC_DEFINE([CONFITEM_HEAP_SIZE], 256, [Size of the confitem heap.])
+	AC_DEFINE([MONITOR_HEAP_SIZE], 1024, [Size of the monitor heap.])
+	AC_DEFINE([FD_HEAP_SIZE], 1024, [Size of fd heap.])
+	AC_DEFINE([AWAY_HEAP_SIZE], 512, [Size of away heap.])
+fi
 
 AC_ARG_WITH(nicklen,
-AC_HELP_STRING([--with-nicklen=LENGTH],[Set the nick length to LENGTH (default 31, max 50)]),
+AC_HELP_STRING([--with-nicklen=LENGTH],[Set the nick length to LENGTH (default 15, max 50)]),
 [
-  if ! expr "$withval" + 0 >/dev/null 2>&1; then
+  if ! expr "$withval" + 0 >/dev/null 2>&1; then 
 	AC_ERROR([NICKLEN must be a numeric value])
   fi 
   if test $withval -ge 50; then
@@ -922,20 +875,20 @@ AC_HELP_STRING([--with-nicklen=LENGTH],[Set the nick length to LENGTH (default 3
   else
 	NICKLEN="$withval"
   fi
-], [NICKLEN=31])
+], [NICKLEN=15])
 
-AC_ARG_WITH(topiclen,
-AC_HELP_STRING([--with-topiclen=NUMBER],[Set the max topic length to NUMBER (default 390, max 780)]),
+AC_ARG_WITH(topiclen,           
+AC_HELP_STRING([--with-topiclen=NUMBER],[Set the max topic length to NUMBER (default 390, max 390)]),
 [
- if test $withval -ge 780; then
-	TOPICLEN=780
-	AC_MSG_WARN([TOPICLEN has a hard limit of 780. Setting TOPICLEN=390])
+ if test $withval -ge 390; then
+	TOPICLEN=390
+	AC_MSG_WARN([TOPICLEN has a hard limit of 390. Setting TOPICLEN=390])
  else
  	TOPICLEN=$withval
  fi
 ], [TOPICLEN=390])
 
-AC_DEFINE_UNQUOTED(TOPICLEN, ${TOPICLEN}, [Maximum topic length (<=780)])
+AC_DEFINE_UNQUOTED(TOPICLEN, ${TOPICLEN}, [Maximum topic length (<=390)])
 AC_DEFINE_UNQUOTED(NICKLEN, (${NICKLEN}+1), [Nickname length])
 
 shared_modules="yes"
@@ -952,12 +905,12 @@ dnl Second stage: check for functions and headers.
 if test "$shared_modules" = yes; then
 	DYNLINK_C=dynlink.c
 	AC_CHECK_HEADERS(dlfcn.h)
-	AC_SEARCH_LIBS(shl_load, dld,
+	AC_SEARCH_LIBS(shl_load, dld, 
 	[
 	  AC_DEFINE(HAVE_SHL_LOAD, 1, [Define if the shl_load function is available.])
 	  SUFFIX=".sl"
 	  MOD_TARGET=hpux_shared
-	  SEDOBJ="s/\.o/.sl/g"
+	  SEDOBJ="s/\.o/.sl/g"  
 	],
 	dnl !shl_load:
 	[
@@ -993,14 +946,14 @@ if test "$shared_modules" = yes; then
 	hold_ldflags=$LDFLAGS
 	AC_MSG_CHECKING(for the ld -export-dynamic flag)
 	LDFLAGS="${LDFLAGS} -Wl,-export-dynamic -Werror"
-	AC_LINK_IFELSE(AC_LANG_PROGRAM([],[int i;]), found=yes, found=no)
+	AC_LINK_IFELSE(AC_LANG_PROGRAM([],[;]), found=yes, found=no)
 	LDFLAGS=$hold_ldflags
 
 	if expr "`uname -s`" : ^IRIX >/dev/null 2>&1; then
 		found="no, IRIX ld uses -B,dynamic"
 		LDFLAGS="${LDFLAGS} -Wl,-B,dynamic"
 	fi
-
+	
 	if expr "`uname -s`" : ^AIX >/dev/null 2>&1; then
 		found="no, AIX ld uses -G -brtl"
 		LDFLAGS="${LDFLAGS} -Wl,-G,-brtl"
@@ -1020,14 +973,14 @@ if test "$shared_modules" = yes; then
 		AC_MSG_RESULT([SVR4 SGS interfaces: -KPIC -DPIC -G])
 		PICFLAGS="-KPIC -DPIC -G"
 	fi
-
+	
 	if test "$AppleGCC" = "yes"; then
 		AC_MSG_RESULT([Darwin Mach-O bundles: -fno-common -bundle -flat_namespace -undefined suppress])
 		PICFLAGS="-fno-common -bundle -flat_namespace -undefined suppress"
 	fi
 	dnl Please note, that on HPUX two different stages of module compilation occurs, since
 	dnl while compiling modules, the compiler does not allow you to give arguments
-	dnl to the linker. (I did not design this)
+	dnl to the linker. (I did not design this) 
 	dnl So we need -c in the first stage of module compilation.
 	dnl In the second stage, we link the modules via ld -b.
 	dnl Additionally, HPUX does not like -export-dynamic, it likes -E instead.
@@ -1036,8 +989,8 @@ if test "$shared_modules" = yes; then
 		AC_MSG_RESULT(HP-UX cc: +z -r -q -n)
 		PICFLAGS="+z -r -q -n -c"
 		AC_MSG_CHECKING([if +ESfic is required on this platform])
-
-		if expr "`$CC +ESfic 2>&1`" : ".*neither supported.*" >/dev/null; then
+		
+		if expr "`$CC +ESfic 2>&1`" : ".*neither supported.*" >/dev/null; then 
 			AC_MSG_RESULT(no)
 		else
 			AC_MSG_RESULT(yes)
@@ -1191,7 +1144,7 @@ AC_SUBST(IRC_CFLAGS)
 AC_SUBST(SEDOBJ)
 
 
-if test "$prefix" = "NONE"; then
+if test "$prefix" = "NONE"; then 
 	AC_DEFINE_UNQUOTED(IRCD_PREFIX, "$ac_default_prefix", [Prefix where the ircd is installed.])
 
 else
@@ -1201,7 +1154,7 @@ dnl a custom prefix with a trailing slash
 
 	prefix=`echo $prefix | sed 's/\/$//'`
 	AC_DEFINE_UNQUOTED(IRCD_PREFIX, "$prefix", [Prefix where the ircd is installed.])
-
+	
 fi
 
 AC_CONFIG_FILES(			\
@@ -1209,15 +1162,12 @@ AC_CONFIG_FILES(			\
 	bandb/Makefile			\
 	ssld/Makefile			\
 	extensions/Makefile		\
-	unsupported/Makefile		\
 	src/Makefile			\
 	modules/Makefile		\
 	tools/Makefile			\
-	tools/genssl.sh			\
 	doc/Makefile			\
 	help/Makefile			\
 )
-AC_CONFIG_COMMANDS([tools/genssl.sh_chmod], [chmod 755 tools/genssl.sh])
 
 AC_OUTPUT
 
@@ -1240,10 +1190,11 @@ Configuration:
 	Ziplinks           : $zlib
 	OpenSSL            : $openssl
 	Socket Engine      : $SELECT_TYPE
+	Small network      : $small_net
 	Block allocator    : $balloc
-        Shared sqlite      : $shared_sqlite
 
 	Nickname length    : $NICKLEN
 	Topic length       : $TOPICLEN
 
-Use (g)make to compile sIRCd, then (g)make install to install it."
+Use (g)make to compile aspIRCd, then (g)make install to install it.
+"

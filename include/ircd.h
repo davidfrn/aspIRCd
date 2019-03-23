@@ -21,6 +21,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *  USA
  *
+ *  $Id: ircd.h 1851 2006-08-24 17:16:53Z jilles $
  */
 
 #ifndef INCLUDED_ircd_h
@@ -42,9 +43,10 @@ struct SetOptions
 	int spam_num;
 	int spam_time;
 
-	char operhost[REALLEN];
 	char operstring[REALLEN];
 	char adminstring[REALLEN];
+	char netadminstring[REALLEN];
+	char helperstring[REALLEN];
 };
 
 struct Metadata
@@ -72,6 +74,7 @@ extern const char *platform;
 extern const char *infotext[];
 extern const char *serno;
 extern const char *ircd_version;
+extern const char *charybdis_version;
 extern const char *logFileName;
 extern const char *pidFileName;
 extern int cold_start;
@@ -110,7 +113,7 @@ extern int testing_conf;
 extern struct ev_entry *check_splitmode_ev;
 
 extern int ssl_ok;
-extern int zlib_ok; 
+extern int zlib_ok;
 extern int maxconnections;
 
 void ircd_shutdown(const char *reason);

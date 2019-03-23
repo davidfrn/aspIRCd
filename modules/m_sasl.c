@@ -1,6 +1,7 @@
 /* modules/m_sasl.c
  *   Copyright (C) 2006 Michael Tharp <gxti@partiallystapled.com>
  *   Copyright (C) 2006 charybdis development team
+ *   Copyright (C) 2016 ChatLounge IRC Network Development Team
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -25,7 +26,6 @@
  * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
  * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
- *
  */
 
 #include "stdinc.h"
@@ -36,161 +36,295 @@
 #include "msg.h"
 #include "modules.h"
 #include "numeric.h"
+#include "reject.h"
 #include "s_serv.h"
 #include "s_stats.h"
 #include "string.h"
 #include "s_newconf.h"
 #include "s_conf.h"
 
-static int mr_authenticate(struct Client *, struct Client *, int, const char **);
-static int me_sasl(struct Client *, struct Client *, int, const char **);
-static int server_auth_sasl(struct Client *);
+static const char sasl_desc[] = "Provides SASL authentication support";
+
+static void m_authenticate(struct MsgBuf *, struct Client *, struct Client *, int, const char **);
+static void me_sasl(struct MsgBuf *, struct Client *, struct Client *, int, const char **);
+static void me_mechlist(struct MsgBuf *, struct Client *, struct Client *, int, const char **);
 
 static void abort_sasl(struct Client *);
 static void abort_sasl_exit(hook_data_client_exit *);
 
+static void advertise_sasl_cap(bool);
+static void advertise_sasl_new(struct Client *);
+static void advertise_sasl_exit(void *);
+static void advertise_sasl_config(void *);
+
+static unsigned int CLICAP_SASL = 0;
+static char mechlist_buf[BUFSIZE];
+static bool sasl_agent_present = false;
+
 struct Message authenticate_msgtab = {
-    "AUTHENTICATE", 0, 0, 0, MFLG_SLOW,
-    {{mr_authenticate, 2}, mg_reg, mg_ignore, mg_ignore, mg_ignore, mg_reg}
+	"AUTHENTICATE", 0, 0, 0, 0,
+	{{m_authenticate, 2}, {m_authenticate, 2}, mg_ignore, mg_ignore, mg_ignore, {m_authenticate, 2}}
 };
 struct Message sasl_msgtab = {
-    "SASL", 0, 0, 0, MFLG_SLOW,
-    {mg_ignore, mg_ignore, mg_ignore, mg_ignore, {me_sasl, 5}, mg_ignore}
+	"SASL", 0, 0, 0, 0,
+	{mg_ignore, mg_ignore, mg_ignore, mg_ignore, {me_sasl, 5}, mg_ignore}
+};
+struct Message mechlist_msgtab = {
+	"MECHLIST", 0, 0, 0, 0,
+	{mg_ignore, mg_ignore, mg_ignore, mg_ignore, {me_mechlist, 2}, mg_ignore}
 };
 
 mapi_clist_av1 sasl_clist[] = {
-    &authenticate_msgtab, &sasl_msgtab, NULL
+	&authenticate_msgtab, &sasl_msgtab, &mechlist_msgtab, NULL
 };
 mapi_hfn_list_av1 sasl_hfnlist[] = {
-    { "new_local_user",	(hookfn) abort_sasl },
-    { "client_exit",	(hookfn) abort_sasl_exit },
-    { NULL, NULL }
+	{ "new_local_user",	(hookfn) abort_sasl },
+	{ "client_exit",	(hookfn) abort_sasl_exit },
+	{ "new_remote_user",	(hookfn) advertise_sasl_new },
+	{ "after_client_exit",	(hookfn) advertise_sasl_exit },
+	{ "conf_read_end",	(hookfn) advertise_sasl_config },
+	{ NULL, NULL }
 };
 
-DECLARE_MODULE_AV1(sasl, NULL, NULL, sasl_clist, NULL, sasl_hfnlist, "$Revision: 1409 $");
-
-static int
-mr_authenticate(struct Client *client_p, struct Client *source_p,
-                int parc, const char *parv[])
+static bool
+sasl_visible(struct Client *ignored)
 {
-    struct Client *saslserv_p = NULL;
+	struct Client *agent_p = NULL;
 
-    /* They really should use CAP for their own sake. */
-    if(!IsCapable(source_p, CLICAP_SASL))
-        return 0;
+	if (ConfigFileEntry.sasl_service)
+		agent_p = find_named_client(ConfigFileEntry.sasl_service);
 
-    if (strlen(client_p->id) == 3) {
-        exit_client(client_p, client_p, client_p, "Mixing client and server protocol");
-        return 0;
-    }
-
-    saslserv_p = find_named_client(ConfigFileEntry.sasl_service);
-    if (saslserv_p == NULL || !IsService(saslserv_p)) {
-        sendto_one(source_p, form_str(ERR_SASLABORTED), me.name, EmptyString(source_p->name) ? "*" : source_p->name);
-        return 0;
-    }
-
-    if(source_p->preClient->sasl_complete) {
-        sendto_one(source_p, form_str(ERR_SASLALREADY), me.name, EmptyString(source_p->name) ? "*" : source_p->name);
-        return 0;
-    }
-
-    if(strlen(parv[1]) > 400) {
-        sendto_one(source_p, form_str(ERR_SASLTOOLONG), me.name, EmptyString(source_p->name) ? "*" : source_p->name);
-        return 0;
-    }
-
-    if(!*source_p->id) {
-        /* Allocate a UID. */
-        strcpy(source_p->id, generate_uid());
-        add_to_id_hash(source_p->id, source_p);
-    }
-
-    if (source_p->preClient == NULL) {
-        if (!strcmp(parv[1], "EXTERNAL") && source_p->certfp != NULL)
-            sendto_one(saslserv_p, ":%s ENCAP %s SASL %s %s S %s %s", me.id, saslserv_p->servptr->name, source_p->id, saslserv_p->id, parv[1], source_p->certfp);
-        else
-            sendto_one(saslserv_p, ":%s ENCAP %s SASL %s %s S %s", me.id, saslserv_p->servptr->name, source_p->id, saslserv_p->id, parv[1]);
-
-        rb_strlcpy(source_p->preClient->sasl_agent, saslserv_p->id, IDLEN);
-    } else
-        sendto_one(saslserv_p, ":%s ENCAP %s SASL %s %s C %s", me.id, saslserv_p->servptr->name, source_p->id, saslserv_p->id, parv[1]);
-    source_p->preClient->sasl_out++;
-
-    return 0;
+	return agent_p != NULL && IsService(agent_p);
 }
 
-static int
-me_sasl(struct Client *client_p, struct Client *source_p,
-        int parc, const char *parv[])
+static const char *
+sasl_data(struct Client *client_p)
 {
-    struct Client *target_p, *agent_p;
-
-    /* Let propagate if not addressed to us, or if broadcast.
-     * Only SASL agents can answer global requests.
-     */
-    if(strncmp(parv[2], me.id, 3))
-        return 0;
-
-    if((target_p = find_id(parv[2])) == NULL)
-        return 0;
-
-    if(target_p->preClient == NULL)
-        return 0;
-
-    if((agent_p = find_id(parv[1])) == NULL)
-        return 0;
-
-    if(source_p != agent_p->servptr) /* WTF?! */
-        return 0;
-
-    /* We only accept messages from SASL agents; these must have umode +S
-     * (so the server must be listed in a service{} block).
-     */
-    if(!IsService(agent_p))
-        return 0;
-
-    /* Reject if someone has already answered. */
-    if(*target_p->preClient->sasl_agent && strncmp(parv[1], target_p->preClient->sasl_agent, IDLEN))
-        return 0;
-    else if(!*target_p->preClient->sasl_agent)
-        rb_strlcpy(target_p->preClient->sasl_agent, parv[1], IDLEN);
-
-    if(*parv[3] == 'C')
-        sendto_one(target_p, "AUTHENTICATE %s", parv[4]);
-    else if(*parv[3] == 'D') {
-        if(*parv[4] == 'F')
-            sendto_one(target_p, form_str(ERR_SASLFAIL), me.name, EmptyString(target_p->name) ? "*" : target_p->name);
-        else if(*parv[4] == 'S') {
-            sendto_one(target_p, form_str(RPL_SASLSUCCESS), me.name, EmptyString(target_p->name) ? "*" : target_p->name);
-            target_p->preClient->sasl_complete = 1;
-            ServerStats.is_ssuc++;
-            server_auth_sasl(target_p);
-        }
-        *target_p->preClient->sasl_agent = '\0'; /* Blank the stored agent so someone else can answer */
-    }
-
-    return 0;
+	return *mechlist_buf != 0 ? mechlist_buf : NULL;
 }
 
-static int server_auth_sasl(struct Client *client_p)
+static struct ClientCapability capdata_sasl = {
+	.visible = sasl_visible,
+	.data = sasl_data,
+	.flags = CLICAP_FLAGS_STICKY,
+};
+
+static int
+_modinit(void)
 {
-    char *auth_user = NULL;
+	memset(mechlist_buf, 0, sizeof mechlist_buf);
+	sasl_agent_present = false;
 
-    if (client_p->localClient->auth_user != NULL) {
-        memset(client_p->localClient->auth_user, 0,
-               strlen(client_p->localClient->auth_user));
-        rb_free(client_p->localClient->auth_user);
-        client_p->localClient->auth_user = NULL;
-    }
+	CLICAP_SASL = capability_put(cli_capindex, "sasl", &capdata_sasl);
+	advertise_sasl_config(NULL);
+	return 0;
+}
 
-    if (client_p->user != NULL && client_p->user->suser != NULL)
-        auth_user = rb_strndup(client_p->user->suser, PASSWDLEN);
+static void
+_moddeinit(void)
+{
+	advertise_sasl_cap(false);
+	capability_orphan(cli_capindex, "sasl");
+}
 
-    if (auth_user != NULL)
-        client_p->localClient->auth_user = rb_strndup(auth_user, PASSWDLEN);
+DECLARE_MODULE_AV2(sasl, _modinit, _moddeinit, sasl_clist, NULL, sasl_hfnlist, NULL, NULL, sasl_desc);
 
-    return 0;
+static void
+m_authenticate(struct MsgBuf *msgbuf_p, struct Client *client_p, struct Client *source_p,
+	int parc, const char *parv[])
+{
+	struct Client *agent_p = NULL;
+	struct Client *saslserv_p = NULL;
+
+	/* They really should use CAP for their own sake. */
+	if(!IsCapable(source_p, CLICAP_SASL))
+		return;
+
+	if(source_p->localClient->sasl_next_retry > rb_current_time())
+	{
+		sendto_one(source_p, form_str(RPL_LOAD2HI), me.name, EmptyString(source_p->name) ? "*" : source_p->name, msgbuf_p->cmd);
+		return;
+	}
+
+	if (strlen(client_p->id) == 3 || (source_p->preClient && !EmptyString(source_p->preClient->id)))
+	{
+		exit_client(client_p, client_p, client_p, "Mixing client and server protocol");
+		return;
+	}
+
+	if (*parv[1] == ':' || strchr(parv[1], ' '))
+	{
+		exit_client(client_p, client_p, client_p, "Malformed AUTHENTICATE");
+		return;
+	}
+
+	saslserv_p = find_named_client(ConfigFileEntry.sasl_service);
+	if(saslserv_p == NULL || !IsService(saslserv_p))
+	{
+		sendto_one(source_p, form_str(ERR_SASLABORTED), me.name, EmptyString(source_p->name) ? "*" : source_p->name);
+		return;
+	}
+
+	if(source_p->localClient->sasl_complete)
+	{
+		*source_p->localClient->sasl_agent = '\0';
+		source_p->localClient->sasl_complete = 0;
+	}
+
+	if(strlen(parv[1]) > 400)
+	{
+		sendto_one(source_p, form_str(ERR_SASLTOOLONG), me.name, EmptyString(source_p->name) ? "*" : source_p->name);
+		return;
+	}
+
+	if(!*source_p->id)
+	{
+		/* Allocate a UID. */
+		rb_strlcpy(source_p->id, generate_uid(), sizeof(source_p->id));
+		add_to_id_hash(source_p->id, source_p);
+	}
+
+	if(*source_p->localClient->sasl_agent)
+		agent_p = find_id(source_p->localClient->sasl_agent);
+
+	if(agent_p == NULL)
+	{
+		if (!strcmp(parv[1], "*"))
+		{
+			sendto_one(source_p, form_str(ERR_SASLABORTED), me.name, EmptyString(source_p->name) ? "*" : source_p->name);
+			source_p->localClient->sasl_out = 0;
+			return;
+		}
+
+		sendto_one(saslserv_p, ":%s ENCAP %s SASL %s %s H %s %s %c",
+					me.id, saslserv_p->servptr->name, source_p->id, saslserv_p->id,
+					source_p->host, source_p->sockhost,
+					IsSSL(source_p) ? 'S' : 'P');
+
+		if (source_p->certfp != NULL)
+			sendto_one(saslserv_p, ":%s ENCAP %s SASL %s %s S %s %s",
+						me.id, saslserv_p->servptr->name, source_p->id, saslserv_p->id,
+						parv[1], source_p->certfp);
+		else
+			sendto_one(saslserv_p, ":%s ENCAP %s SASL %s %s S %s",
+						me.id, saslserv_p->servptr->name, source_p->id, saslserv_p->id,
+						parv[1]);
+
+		rb_strlcpy(source_p->localClient->sasl_agent, saslserv_p->id, IDLEN);
+	}
+	else
+	{
+		if (!strcmp(parv[1], "*"))
+		{
+			sendto_one(source_p, form_str(ERR_SASLABORTED), me.name, EmptyString(source_p->name) ? "*" : source_p->name);
+			sendto_one(agent_p, ":%s ENCAP %s SASL %s %s D A", me.id, agent_p->servptr->name, source_p->id, agent_p->id);
+			source_p->localClient->sasl_out = 0;
+			return;
+		}
+
+		sendto_one(agent_p, ":%s ENCAP %s SASL %s %s C %s",
+				me.id, agent_p->servptr->name, source_p->id, agent_p->id,
+				parv[1]);
+	}
+
+	source_p->localClient->sasl_out++;
+}
+
+static void
+me_sasl(struct MsgBuf *msgbuf_p, struct Client *client_p, struct Client *source_p,
+	int parc, const char *parv[])
+{
+	struct Client *target_p, *agent_p;
+	bool in_progress;
+
+	/* Let propagate if not addressed to us, or if broadcast.
+	 * Only SASL agents can answer global requests.
+	 */
+	if(strncmp(parv[2], me.id, 3))
+		return;
+
+	if((target_p = find_id(parv[2])) == NULL)
+		return;
+
+	if((agent_p = find_id(parv[1])) == NULL)
+		return;
+
+	if(source_p != agent_p->servptr) /* WTF?! */
+		return;
+
+	/* We only accept messages from SASL agents; these must have umode +S
+	 * (so the server must be listed in a service{} block).
+	 */
+	if(!IsService(agent_p))
+		return;
+
+	/* If SASL has been aborted, we only want to track authentication failures. */
+	in_progress = target_p->localClient->sasl_out != 0;
+
+	/* Reject if someone has already answered. */
+	if(*target_p->localClient->sasl_agent && strncmp(parv[1], target_p->localClient->sasl_agent, IDLEN))
+		return;
+	else if(!*target_p->localClient->sasl_agent && in_progress)
+		rb_strlcpy(target_p->localClient->sasl_agent, parv[1], IDLEN);
+
+	if(*parv[3] == 'C')
+	{
+		if (in_progress) {
+			sendto_one(target_p, "AUTHENTICATE %s", parv[4]);
+			target_p->localClient->sasl_messages++;
+		}
+	}
+	else if(*parv[3] == 'D')
+	{
+		if(*parv[4] == 'F')
+		{
+			if (in_progress) {
+				sendto_one(target_p, form_str(ERR_SASLFAIL), me.name, EmptyString(target_p->name) ? "*" : target_p->name);
+			}
+			/* Failures with zero messages are just "unknown mechanism" errors; don't count those. */
+			if(target_p->localClient->sasl_messages > 0)
+			{
+				if(*target_p->name)
+				{
+					/* Allow 2 tries before rate-limiting as some clients try EXTERNAL
+					 * then PLAIN right after it if the auth failed, causing the client to be
+					 * rate-limited immediately and not being able to login with SASL.
+					 */
+					if (target_p->localClient->sasl_failures++ > 0)
+						target_p->localClient->sasl_next_retry = rb_current_time() + (1 << MIN(target_p->localClient->sasl_failures + 1, 8));
+				}
+				else if(throttle_add((struct sockaddr*)&target_p->localClient->ip))
+				{
+					exit_client(target_p, target_p, &me, "Too many failed authentication attempts");
+					return;
+				}
+			}
+		}
+		else if(*parv[4] == 'S')
+		{
+			if (in_progress) {
+				sendto_one(target_p, form_str(RPL_SASLSUCCESS), me.name, EmptyString(target_p->name) ? "*" : target_p->name);
+				target_p->localClient->sasl_failures = 0;
+				target_p->localClient->sasl_complete = 1;
+				ServerStats.is_ssuc++;
+			}
+		}
+		*target_p->localClient->sasl_agent = '\0'; /* Blank the stored agent so someone else can answer */
+		target_p->localClient->sasl_messages = 0;
+	}
+	else if(*parv[3] == 'M')
+	{
+		if (in_progress) {
+			sendto_one(target_p, form_str(RPL_SASLMECHS), me.name, EmptyString(target_p->name) ? "*" : target_p->name, parv[4]);
+		}
+	}
+}
+
+static void
+me_mechlist(struct MsgBuf *msgbuf_p, struct Client *client_p, struct Client *source_p,
+	    int parc, const char *parv[])
+{
+	rb_strlcpy(mechlist_buf, parv[1], sizeof mechlist_buf);
 }
 
 /* If the client never finished authenticating but is
@@ -199,32 +333,75 @@ static int server_auth_sasl(struct Client *client_p)
 static void
 abort_sasl(struct Client *data)
 {
-    if(data->preClient->sasl_out == 0 || data->preClient->sasl_complete)
-        return;
+	if(data->localClient->sasl_out == 0 || data->localClient->sasl_complete)
+		return;
 
-    data->preClient->sasl_out = data->preClient->sasl_complete = 0;
-    ServerStats.is_sbad++;
+	data->localClient->sasl_out = data->localClient->sasl_complete = 0;
+	ServerStats.is_sbad++;
 
-    if(!IsClosing(data))
-        sendto_one(data, form_str(ERR_SASLABORTED), me.name, EmptyString(data->name) ? "*" : data->name);
+	if(!IsClosing(data))
+		sendto_one(data, form_str(ERR_SASLABORTED), me.name, EmptyString(data->name) ? "*" : data->name);
 
-    if(*data->preClient->sasl_agent) {
-        struct Client *agent_p = find_id(data->preClient->sasl_agent);
-        if(agent_p) {
-            sendto_one(agent_p, ":%s ENCAP %s SASL %s %s D A", me.id, agent_p->servptr->name,
-                       data->id, agent_p->id);
-            return;
-        }
-    }
+	if(*data->localClient->sasl_agent)
+	{
+		struct Client *agent_p = find_id(data->localClient->sasl_agent);
+		if(agent_p)
+		{
+			sendto_one(agent_p, ":%s ENCAP %s SASL %s %s D A", me.id, agent_p->servptr->name,
+					data->id, agent_p->id);
+			return;
+		}
+	}
 
-    sendto_server(NULL, NULL, CAP_TS6|CAP_ENCAP, NOCAPS, ":%s ENCAP * SASL %s * D A", me.id,
-                  data->id);
+	sendto_server(NULL, NULL, CAP_TS6|CAP_ENCAP, NOCAPS, ":%s ENCAP * SASL %s * D A", me.id,
+			data->id);
 }
 
 static void
 abort_sasl_exit(hook_data_client_exit *data)
 {
-    if (data->target->preClient)
-        abort_sasl(data->target);
+	if (data->target->localClient)
+		abort_sasl(data->target);
 }
 
+static void
+advertise_sasl_cap(bool available)
+{
+	if (sasl_agent_present != available) {
+		if (available) {
+			sendto_local_clients_with_capability(CLICAP_CAP_NOTIFY, ":%s CAP * NEW :sasl", me.name);
+		} else {
+			sendto_local_clients_with_capability(CLICAP_CAP_NOTIFY, ":%s CAP * DEL :sasl", me.name);
+		}
+		sasl_agent_present = available;
+	}
+}
+
+static void
+advertise_sasl_new(struct Client *client_p)
+{
+	if (!ConfigFileEntry.sasl_service)
+		return;
+
+	if (irccmp(client_p->name, ConfigFileEntry.sasl_service))
+		return;
+
+	advertise_sasl_cap(IsService(client_p));
+}
+
+static void
+advertise_sasl_exit(void *ignored)
+{
+	if (!ConfigFileEntry.sasl_service)
+		return;
+
+	if (sasl_agent_present) {
+		advertise_sasl_cap(sasl_visible(NULL));
+	}
+}
+
+static void
+advertise_sasl_config(void *ignored)
+{
+	advertise_sasl_cap(sasl_visible(NULL));
+}

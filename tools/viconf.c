@@ -1,6 +1,7 @@
 /*
  * viconf.c
  *
+ * $Id: viconf.c 6 2005-09-10 01:02:21Z nenolod $
  */
 #include <stdio.h>
 #include <unistd.h>
@@ -12,9 +13,6 @@
 #include <signal.h>
 #include "config.h"
 
-#ifndef PROGRAM_PREFIX
-#define PROGRAM_PREFIX ""
-#endif
 
 /* wait.h is in /include on solaris, likely on other SYSV machines as well
  * but wait.h is normally in /include/sys on BSD boxen,
@@ -47,7 +45,7 @@ int main(int argc, char *argv[])
   else
     p++;
 
-  if(strcmp(p, PROGRAM_PREFIX "vimotd") == 0)
+  if(strcmp(p, "vimotd") == 0)
     filename = MPATH;
 
   if(LockedFile(filename))

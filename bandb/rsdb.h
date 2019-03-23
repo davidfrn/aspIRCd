@@ -1,3 +1,4 @@
+/* $Id: rsdb.h 26164 2008-10-26 19:52:43Z androsyn $ */
 #ifndef INCLUDED_rsdb_h
 #define INCLUDED_rsdb_h
 

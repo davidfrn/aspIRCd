@@ -21,6 +21,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *  USA
  *
+ *  $Id: config.h 3354 2007-04-03 09:21:31Z nenolod $
  */
 
 #ifndef INCLUDED_config_h
@@ -58,14 +59,16 @@
 #define HPATH  HELP_DIR "/opers"
 
 /* files */
-#define SPATH    BINPATH "/" PROGRAM_PREFIX "ircd"		   /* ircd executable */
+#define SPATH    BINPATH "/ircd"		   /* ircd executable */
+#define LIPATH   LIBPATH "/libircd" SHARED_SUFFIX  /* ircd library */
 #define CPATH    ETCPATH "/ircd.conf"		   /* ircd.conf file */
 #define MPATH    ETCPATH "/ircd.motd"		   /* MOTD file */
+#define SMPATH   ETCPATH "/ircd.smotd"		   /* Short MOTD file */
+#define RPATH    ETCPATH "/ircd.rules"		   /* RULES file */
 #define LPATH    LOGPATH "/ircd.log"		   /* ircd logfile */
-#define RPATH    ETCPATH "/ircd.rules"             /* RULES file */
-#define PPATH    PKGRUNDIR "/ircd.pid"		   /* pid file */
+#define PPATH    ETCPATH "/ircd.pid"		   /* pid file */
 #define OPATH    ETCPATH "/opers.motd"		   /* oper MOTD file */
-#define DBPATH   PKGLOCALSTATEDIR "/ban.db"                 /* bandb file */
+#define DBPATH   ETCPATH "/ban.db"                 /* bandb file */
 
 /* IGNORE_BOGUS_TS
  * Ignore bogus timestamps from other servers. Yes this will desync

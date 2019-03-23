@@ -16,14 +16,7 @@ INSTALL_PROGRAM	= @INSTALL_PROGRAM@
 INSTALL_DATA	= @INSTALL_DATA@
 INSTALL_SUID    = @INSTALL_PROGRAM@ -o root -m 4755
 SHELL		= /bin/sh
-
-prefix          = @prefix@
-exec_prefix     = @exec_prefix@
-libdir          = @libdir@
-pkglibdir       = @pkglibdir@
-moduledir       = @moduledir@
-PACKAGE_TARNAME = @PACKAGE_TARNAME@
-AUTOMODULEDIR	= $(moduledir)/extensions
+AUTOMODULEDIR	= @moduledir@/extensions
 
 SSL_LIBS	= @SSL_LIBS@
 SSL_INCLUDES	= @SSL_INCLUDES@
@@ -35,51 +28,68 @@ CPPFLAGS	= ${INCLUDES} @CPPFLAGS@
 
 SRCS =                          \
   chm_adminonly.c		\
-  chm_insecure.c                \
+  chm_operonly.c		\
+  chm_operonly_compat.c		\
   chm_quietunreg_compat.c	\
-  chm_operpeace.c               \
+  chm_sslonly.c			\
+  chm_sslonly_compat.c		\
   createauthonly.c		\
   createoperonly.c		\
   extb_account.c		\
   extb_canjoin.c		\
   extb_channel.c		\
-  extb_hostmask.c               \
   extb_oper.c			\
   extb_server.c			\
   extb_ssl.c			\
+  extb_sctp.c			\
+  extb_ssl_fp.c			\
+  extb_webircname.c		\
+  extb_hostmask.c		\
+  extb_combi.c			\
   extb_realname.c		\
   extb_extgecos.c		\
-  extb_usermode.c               \
-  extb_unidentified.c           \
+  extb_xascii.c		\
   force_user_invis.c		\
-  hurt.c			\
+  identify_msg.c		\
+  ip_cloaking.c			\
+  ip_cloaking_old.c		\
+  make_override_immune.c	\
+  sno_channelcreate.c           \
+  ip_cloaking_3.0.c		\
+  ip_cloaking_4.0.c		\
+  ip_cloaking_5.c		\
+  ip_cloaking_5nolssl.c	\
+  override.c			\
+  sslonlymsg.c			\
+  hidecfp.c			\
+  hideidle.c			\
+  hidechannels.c		\
+  whois_helpop.c		\
+  whois_is_a_bot.c		\
   sno_farconnect.c		\
   sno_globalkline.c		\
+  sno_globalnickchange.c        \
   sno_globaloper.c		\
+  sno_whois.c			\
+  m_42.c			\
   m_adminwall.c			\
-  m_cycle.c			\
-  m_chanlog.c                   \
+  m_dehelper.c			\
+  m_extendchans.c		\
   m_findforwards.c		\
-  m_forcenick.c                 \
-  m_forcejoin.c                 \
-  m_forcepart.c			\
-  m_forcequit.c                 \
   m_identify.c			\
-  m_locops.c                    \
+  m_listenoff.c			\
   m_mkpasswd.c                  \
-  m_oaccept.c			\
   m_ojoin.c			\
   m_olist.c			\
+  m_force.c			\
   m_okick.c			\
   m_omode.c			\
   m_opme.c			\
-  m_partall.c                   \
-  m_oquit.c                     \
   m_sendbans.c			\
+  m_webirc.c			\
+  m_roleplay.c			\
   no_locops.c			\
-  no_oper_invis.c		\
-  sasl_usercloak.c              \
-  sno_globalnickchange.c        \
+  sasl_usercloak.c		\
   spy_admin_notice.c		\
   spy_info_notice.c		\
   spy_links_notice.c		\
@@ -87,7 +97,8 @@ SRCS =                          \
   spy_stats_notice.c            \
   spy_stats_p_notice.c		\
   spy_trace_notice.c		\
-  example_module.c
+  example_module.c 		\
+  hints.c
 
 OBJS = ${SRCS:.c=.so}
 
@@ -107,7 +118,7 @@ install: all
 .SUFFIXES: .so
 
 .c.so:
-	${CC} ${PICFLAGS} ${CPPFLAGS} ${CFLAGS} ${LDFLAGS} $< -o $@
+	${CC} ${PICFLAGS}  ${CPPFLAGS} ${CFLAGS} $< -o $@
 
 .PHONY: depend clean distclean
 depend:

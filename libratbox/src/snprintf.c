@@ -4,6 +4,7 @@
  * The original headers are below..
  * Note that this implementation does not process floating point numbers so
  * you will likely need to fall back to using sprintf yourself to do those...
+ * $Id: snprintf.c 26092 2008-09-19 15:13:52Z androsyn $
  */
 
 /*
@@ -17,7 +18,7 @@
  * Wirzenius wrote this portably, Torvalds fucked it up :-)
  */
 
-/* 
+/*
  * Fri Jul 13 2001 Crutcher Dunnavant <crutcher+kernel@datastacks.com>
  * - changed to provide snprintf and vsnprintf functions
  * So Feb  1 16:51:32 CET 2004 Juergen Quade <quade@hsnr.de>

@@ -19,6 +19,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *  USA
  *
+ *  $Id: spy_motd_notice.c 498 2006-01-15 16:40:33Z jilles $
  */
 #include "stdinc.h"
 #include "modules.h"
@@ -30,8 +31,8 @@
 void show_motd(hook_data *);
 
 mapi_hfn_list_av1 motd_hfnlist[] = {
-    {"doing_motd", (hookfn) show_motd},
-    {NULL, NULL}
+	{"doing_motd", (hookfn) show_motd},
+	{NULL, NULL}
 };
 
 DECLARE_MODULE_AV1(motd_spy, NULL, NULL, NULL, NULL, motd_hfnlist, "$Revision: 498 $");
@@ -39,8 +40,8 @@ DECLARE_MODULE_AV1(motd_spy, NULL, NULL, NULL, NULL, motd_hfnlist, "$Revision: 4
 void
 show_motd(hook_data *data)
 {
-    sendto_realops_snomask(SNO_SPY, L_ALL,
-                           "motd requested by %s (%s@%s) [%s]",
-                           data->client->name, data->client->username,
-                           data->client->host, data->client->servptr->name);
+	sendto_realops_snomask(SNO_SPY, L_ALL,
+			     "motd requested by %s (%s@%s) [%s]",
+			     data->client->name, data->client->username,
+			     data->client->host, data->client->servptr->name);
 }

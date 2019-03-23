@@ -21,6 +21,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *  USA
  *
+ *  $Id: send.h 3520 2007-06-30 22:15:35Z jilles $
  */
 
 #ifndef INCLUDED_send_h
@@ -56,6 +57,9 @@ extern void sendto_server(struct Client *one, struct Channel *chptr,
 
 extern void sendto_channel_flags(struct Client *one, int type, struct Client *source_p,
 				 struct Channel *chptr, const char *, ...) AFP(5, 6);
+extern void sendto_channel_message(struct Client *one, int type, struct Client *source_p,
+				 struct Channel *chptr, const char *command, const char *target,
+				 const char *, ...) AFP(7, 8);
 extern void sendto_channel_opmod(struct Client *one, struct Client *source_p,
 				 struct Channel *chptr, const char *command,
 				 const char *text);
@@ -64,6 +68,8 @@ extern void sendto_channel_local(int type, struct Channel *, const char *, ...) 
 extern void sendto_channel_local_butone(struct Client *, int type, struct Channel *, const char *, ...) AFP(4, 5);
 
 extern void sendto_channel_local_with_capability(int type, int caps, int negcaps, struct Channel *, const char *, ...) AFP(5, 6);
+extern void sendto_channel_local_with_capability_butone(struct Client *, int type, int caps, int negcaps, struct Channel *,
+							const char *, ...) AFP(6, 7);
 
 extern void sendto_common_channels_local(struct Client *, int cap, const char *, ...) AFP(3, 4);
 extern void sendto_common_channels_local_butone(struct Client *, int cap, const char *, ...) AFP(3, 4);
@@ -77,6 +83,9 @@ extern void sendto_match_servs(struct Client *source_p, const char *mask,
 extern void sendto_monitor(struct monitor *monptr, const char *, ...) AFP(2, 3);
 
 extern void sendto_anywhere(struct Client *, struct Client *, const char *,
+			    const char *, ...) AFP(4, 5);
+
+extern void sendto_anywhere_message(struct Client *, struct Client *, const char *,
 			    const char *, ...) AFP(4, 5);
 
 extern void sendto_realops_snomask(int, int, const char *, ...) AFP(3, 4);

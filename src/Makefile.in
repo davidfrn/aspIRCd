@@ -12,7 +12,7 @@ RM		= @RM@
 LEX		= @LEX@
 LEXLIB		= @LEXLIB@
 PICFLAGS	= @PICFLAGS@
-CFLAGS		= @IRC_CFLAGS@
+CFLAGS		= @IRC_CFLAGS@ -DIRCD_PREFIX=\"@prefix@\"
 LDFLAGS   	= @LDFLAGS@
 MKDEP		= @MKDEP@ -DIRCD_PREFIX=\"@prefix@\"
 MV		= @MV@
@@ -23,9 +23,6 @@ exec_prefix	= @exec_prefix@
 bindir		= @bindir@
 libdir		= @libdir@
 libexecdir	= @libexecdir@
-pkglibexecdir   = @pkglibexecdir@
-
-PROGRAM_PREFIX   = @PROGRAM_PREFIX@
 
 DOLLAR = $$
 
@@ -39,7 +36,7 @@ SSL_INCLUDES	= @SSL_INCLUDES@
 IRCDLIBS	= @MODULES_LIBS@ -L../libratbox/src/.libs -lratbox @LIBS@ $(SSL_LIBS)
 
 INCLUDES	= -I../include -I../libratbox/include $(SSL_INCLUDES)
-CPPFLAGS	= ${INCLUDES} -DIRCD_PREFIX=\"@prefix@\" @CPPFLAGS@
+CPPFLAGS	= ${INCLUDES} @CPPFLAGS@
  
 default:	all
 
@@ -49,9 +46,8 @@ y.tab.o:	y.tab.c ircd_parser.y
 # Note GNU bison uses <file>.tab.c not y.tab.c
 y.tab.c:	ircd_parser.y
 	${YACC} -d ircd_parser.y
-y.tab.h:	y.tab.c
 
-lex.yy.o:	lex.yy.c ircd_lexer.l y.tab.h
+lex.yy.o:	lex.yy.c ircd_lexer.l
 	${CC} ${CPPFLAGS} ${PICFLAGS} ${CFLAGS} -I. -c lex.yy.c
 
 lex.yy.c:	ircd_lexer.l
@@ -133,10 +129,10 @@ install: install-mkdirs build
 	fi
 	@echo "ircd: installing ircd ($(PROGS))"
 	@for i in $(PROGS); do \
-		if test -f $(DESTDIR)$(bindir)/$(PROGRAM_PREFIX)$$i; then \
-			$(MV) $(DESTDIR)$(bindir)/$(PROGRAM_PREFIX)$$i $(DESTDIR)$(bindir)/$(PROGRAM_PREFIX)$$i.old; \
+		if test -f $(DESTDIR)$(bindir)/$$i; then \
+			$(MV) $(DESTDIR)$(bindir)/$$i $(DESTDIR)$(bindir)/$$i.old; \
 		fi; \
-		$(INSTALL_BIN) $$i $(DESTDIR)$(bindir)/$(PROGRAM_PREFIX)$$i; \
+		$(INSTALL_BIN) $$i $(DESTDIR)$(bindir); \
 	done
 
 version.c: version.c.SH

@@ -19,6 +19,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *  USA
  *
+ * $Id: stdinc.h 6 2005-09-10 01:02:21Z nenolod $
  *
  */
 
@@ -107,6 +108,7 @@ char *alloca ();
 #endif
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+//#include <netinet/sctp.h>
 #include <arpa/inet.h>
 
 #ifdef HAVE_ERRNO_H

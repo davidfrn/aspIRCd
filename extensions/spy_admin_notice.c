@@ -19,6 +19,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *  USA
  *
+ *  $Id: spy_admin_notice.c 498 2006-01-15 16:40:33Z jilles $
  */
 #include "stdinc.h"
 #include "modules.h"
@@ -30,8 +31,8 @@
 void show_admin(hook_data *);
 
 mapi_hfn_list_av1 admin_hfnlist[] = {
-    {"doing_admin", (hookfn) show_admin},
-    {NULL, NULL}
+	{"doing_admin", (hookfn) show_admin},
+	{NULL, NULL}
 };
 
 DECLARE_MODULE_AV1(admin_spy, NULL, NULL, NULL, NULL, admin_hfnlist, "$Revision: 498 $");
@@ -39,8 +40,8 @@ DECLARE_MODULE_AV1(admin_spy, NULL, NULL, NULL, NULL, admin_hfnlist, "$Revision:
 void
 show_admin(hook_data *data)
 {
-    sendto_realops_snomask(SNO_SPY, L_ALL,
-                           "admin requested by %s (%s@%s) [%s]",
-                           data->client->name, data->client->username,
-                           data->client->host, data->client->servptr->name);
+	sendto_realops_snomask(SNO_SPY, L_ALL,
+			     "admin requested by %s (%s@%s) [%s]",
+			     data->client->name, data->client->username,
+			     data->client->host, data->client->servptr->name);
 }

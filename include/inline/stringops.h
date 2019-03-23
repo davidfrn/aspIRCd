@@ -2,7 +2,7 @@
  *  charybdis: an advanced ircd.
  *  inline/stringops.h: inlined string operations used in a few places
  *
- *  Copyright (c) 2005-2014 charybdis development team
+ *  Copyright (c) 2005-2008 charybdis development team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -107,7 +107,7 @@ strip_unprintable(char *string)
 			*c2++ = *c;
 			break;
 		default:
-			if (*c < 32 && *c >= 0)
+			if (*c < 32)
 				break;
 			*c2++ = *c;
 			last_non_space = c2;

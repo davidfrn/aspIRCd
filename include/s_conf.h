@@ -21,6 +21,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *  USA
  *
+ *  $Id: s_conf.h 3550 2007-08-09 06:47:26Z nenolod $
  */
 
 #ifndef INCLUDED_s_conf_h
@@ -62,12 +63,12 @@ struct ConfItem
 	{
 		char *name;	/* IRC name, nick, server name, or original u@h */
 		const char *oper;
+		char *name2;		/* IRC name, nick, server name, or original u@h */
+		char *webircname;
 	} info;
 	char *host;		/* host part of user@host */
 	char *passwd;		/* doubles as kline reason *ugh* */
 	char *spasswd;		/* Password to send. */
-	char *autojoin;		/* channels for users to autojoin to on connect */
-	char *autojoin_opers; /* channels for opers to autojoin on oper-up */
 	char *user;		/* user part of user@host */
 	int port;
 	time_t hold;		/* Hold action until this time (calendar time) */
@@ -76,6 +77,10 @@ struct ConfItem
 	char *className;	/* Name of class */
 	struct Class *c_class;	/* Class of connection */
 	rb_patricia_node_t *pnode;	/* Our patricia node */
+	char *name;	/* IRC name, nick, server name, or original u@h */
+	const char *oper;
+	char *name2;		/* IRC name, nick, server name, or original u@h */
+	char *webircname;
 };
 
 #define CONF_ILLEGAL            0x80000000
@@ -111,9 +116,11 @@ struct ConfItem
 #define CONF_FLAGS_EXEMPTSHIDE		0x00010000
 #define CONF_FLAGS_EXEMPTJUPE		0x00020000	/* exempt from resv generating warnings */
 #define CONF_FLAGS_NEED_SASL		0x00040000
-#define CONF_FLAGS_ENCRYPTED            0x00200000
-#define CONF_FLAGS_EXEMPTDNSBL		0x04000000
-
+#define CONF_FLAGS_EXTEND_CHANS		0x00080000
+#define CONF_FLAGS_ENCRYPTED            0x00100000
+#define CONF_FLAGS_EXEMPTDNSBL		0x00200000
+#define CONF_FLAGS_SPOOF_WEBCHAT        0x00400000
+#define CONF_FLAGS_USE_USER_IDENT       0x01000000 //jump because of temporary being not-cleared-out...
 
 /* Macros for struct ConfItem */
 #define IsConfBan(x)		((x)->status & (CONF_KILL|CONF_XLINE|CONF_DLINE|\
@@ -128,12 +135,15 @@ struct ConfItem
 #define IsConfExemptShide(x)	((x)->flags & CONF_FLAGS_EXEMPTSHIDE)
 #define IsConfExemptJupe(x)	((x)->flags & CONF_FLAGS_EXEMPTJUPE)
 #define IsConfExemptResv(x)	((x)->flags & CONF_FLAGS_EXEMPTRESV)
+#define IsConfDoSpoofWebchat(x) ((x)->flags & CONF_FLAGS_SPOOF_WEBCHAT)
 #define IsConfDoSpoofIp(x)      ((x)->flags & CONF_FLAGS_SPOOF_IP)
 #define IsConfSpoofNotice(x)    ((x)->flags & CONF_FLAGS_SPOOF_NOTICE)
 #define IsConfEncrypted(x)      ((x)->flags & CONF_FLAGS_ENCRYPTED)
 #define IsNeedSasl(x)		((x)->flags & CONF_FLAGS_NEED_SASL)
 #define IsConfExemptDNSBL(x)	((x)->flags & CONF_FLAGS_EXEMPTDNSBL)
+#define IsConfExtendChans(x)	((x)->flags & CONF_FLAGS_EXTEND_CHANS)
 #define IsConfSSLNeeded(x)	((x)->flags & CONF_FLAGS_NEED_SSL)
+#define IsConfUseUserIdent(x)	((x)->flags & CONF_FLAGS_USE_USER_IDENT)
 
 /* flag definitions for opers now in client.h */
 
@@ -142,18 +152,28 @@ struct config_file_entry
 	const char *dpath;	/* DPATH if set from command line */
 	const char *configfile;
 
+	char *egdpool_path;
+
+	char *default_helpopstring;
 	char *default_operstring;
 	char *default_adminstring;
-	char *default_operhost;
-	char *static_quit;
+	char *default_netadminstring;
+	char *default_helperstring;
 	char *servicestring;
 	char *kline_reason;
-        int static_parts;
-	char *static_part_reason;
+
+	int kline_prefixing;
+	int kline_suffixing;
+	int kline_timesuffixing;
+
+	char *kline_prefix;
+	char *kline_suffix;
+	char *kline_timesuffix;
 
 	char *identifyservice;
 	char *identifycommand;
-        char *sasl_service;
+	char *cloak_key;
+
 	char *fname_userlog;
 	char *fname_fuserlog;
 	char *fname_operlog;
@@ -166,11 +186,9 @@ struct config_file_entry
 
 	unsigned char compression_level;
 	int disable_fake_channels;
-	int hide_channel_below_users;
 	int dots_in_ident;
 	int failed_oper_notice;
 	int anti_nick_flood;
-	int use_part_messages;
 	int anti_spam_exit_message_time;
 	int max_accept;
 	int max_monitor;
@@ -193,13 +211,11 @@ struct config_file_entry
 	int stats_i_oper_only;
 	int stats_P_oper_only;
 	int map_oper_only;
-        int links_oper_only;
 	int operspy_admin_only;
 	int pace_wait;
 	int pace_wait_simple;
 	int short_motd;
 	int no_oper_flood;
-	int true_no_oper_flood;
 	int hide_server;
 	int hide_spoof_ips;
 	int hide_error_messages;
@@ -212,12 +228,13 @@ struct config_file_entry
 	int min_nonwildcard;
 	int min_nonwildcard_simple;
 	int default_floodcount;
-	int client_flood;
 	int default_ident_timeout;
+	int use_egd;
 	int ping_cookie;
 	int tkline_expire_notices;
 	int use_whois_actually;
 	int disable_auth;
+	int post_registration_delay;
 	int connect_timeout;
 	int burst_away;
 	int reject_ban_time;
@@ -227,56 +244,47 @@ struct config_file_entry
 	int throttle_duration;
 	int target_change;
 	int collision_fnc;
-	int resv_fnc;
 	int default_umodes;
 	int global_snotices;
 	int operspy_dont_care_user_info;
-	int servermask;
-        int use_propagated_bans;
-        int secret_channels_in_whois;
 	int expire_override_time;
-    int away_interval;
+	int use_propagated_bans;
+
+	int client_flood_max_lines;
+	int client_flood_burst_rate;
+	int client_flood_burst_max;
+	int client_flood_message_time;
+	int client_flood_message_num;
+
 };
 
 struct config_channel_entry
 {
-	char * autochanmodes;
-        char * autotopic;
-	char * exemptchanops;
-	char * disabledmodes;
-	int admin_on_channel_create;
-	int use_halfop;
-	int use_admin;
-        int use_owner;
-        int can_self_devoice;
-        int use_except;
+	int use_except;
 	int use_invex;
 	int use_knock;
-	int use_forward;
 	int knock_delay;
 	int knock_delay_channel;
+	char *automodes;
+	char *autotopic;
 	int max_bans;
 	int max_bans_large;
 	int max_chans_per_user;
+	int max_chans_per_user_large;
 	int no_create_on_split;
 	int no_join_on_split;
 	int default_split_server_count;
 	int default_split_user_count;
 	int burst_topicwho;
 	int kick_on_split_riding;
+	int disable_local_channels;
 	int only_ascii_channels;
-	int cycle_host_change;
-	int host_in_topic;
 	int resv_forcepart;
 	int channel_target_change;
-
-	int exempt_cmode_c;
-	int exempt_cmode_C;
-	int exempt_cmode_D;
-	int exempt_cmode_T;
-	int exempt_cmode_N;
-	int exempt_cmode_G;
-	int exempt_cmode_K;
+	char *qprefix;
+	char *mprefix;
+	char *aprefix;
+	char *hprefix;
 };
 
 struct config_server_hide
@@ -290,12 +298,10 @@ struct config_server_hide
 struct server_info
 {
 	char *name;
-        char *mask_name;
 	char sid[4];
 	char *description;
 	char *network_name;
-	char *helpchan;
-	char *helpurl;
+	char *network_desc;
 	int hub;
 	struct sockaddr_in ip;
 	int default_max_clients;
@@ -324,11 +330,14 @@ struct alias_entry
 {
 	char *name;
 	char *target;
+	char *prefix;
 	int flags;			/* reserved for later use */
 	int hits;
 };
 
 /* All variables are GLOBAL */
+extern int specific_ipv4_vhost;	/* used in s_bsd.c */
+extern int specific_ipv6_vhost;
 extern struct config_file_entry ConfigFileEntry;	/* defined in ircd.c */
 extern struct config_channel_entry ConfigChannel;	/* defined in channel.c */
 extern struct config_server_hide ConfigServerHide;	/* defined in s_conf.c */

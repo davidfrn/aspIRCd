@@ -22,6 +22,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *  USA
  *
+ *  $Id: ircd_defs.h 3512 2007-06-06 16:20:40Z nenolod $
  */
 
 /*
@@ -93,7 +94,7 @@
 #  error Incorrect config.h for this revision of ircd.
 #endif
 
-#define HOSTLEN         63	/* Length of hostname.  Updated to         */
+#define HOSTLEN         153	/* Length of hostname.  Updated to         */
 				/* comply with RFC1123                     */
 
 #define USERLEN         10
@@ -116,7 +117,6 @@
 #define BUFSIZE         512	/* WARNING: *DONT* CHANGE THIS!!!! */
 #define OPERNICKLEN     (NICKLEN*2)	/* Length of OPERNICKs. */
 
-#define NAMELEN	                (MAX(NICKLEN, HOSTLEN))
 #define USERHOST_REPLYLEN       (NICKLEN+HOSTLEN+USERLEN+5)
 #define MAX_DATE_STRING 32	/* maximum string length for a date string */
 

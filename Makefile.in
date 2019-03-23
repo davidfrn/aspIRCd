@@ -23,19 +23,11 @@ RM=@RM@
 prefix		= @prefix@
 exec_prefix	= @exec_prefix@
 bindir		= @bindir@
-datarootdir     = @datarootdir@
 mandir		= @mandir@
-libdir          = @libdir@
-pkglibdir       = @pkglibdir@
 moduledir	= @moduledir@
 helpdir		= @helpdir@
-sysconfdir	= @sysconfdir@
+confdir		= @confdir@
 logdir		= @logdir@
-rundir		= @rundir@
-pkgrundir	= @pkgrundir@
-localstatedir	= @localstatedir@
-pkglocalstatedir= @pkglocalstatedir@
-PACKAGE_TARNAME	= @PACKAGE_TARNAME@
 
 # Default CFLAGS
 # CFLAGS = -g -O2 -DNDEBUG
@@ -54,7 +46,6 @@ CFLAGS		= @CFLAGS@
 # the system one.
 #CFLAGS= -DNDEBUG -g -O2 -D"FD_SETSIZE=1024"
 SHELL=/bin/sh
-# `extensions' must be after `modules' for proper creation of $(moduledir).
 SUBDIRS=libratbox modules extensions src tools ssld bandb doc help
 CLEANDIRS = ${SUBDIRS}
 RSA_FILES=rsa_respond/README rsa_respond/respond.c rsa_respond/Makefile
@@ -76,13 +67,10 @@ build:
 		sh configure; \
 	fi
 	@if [ -d .git ] ; then \
-		revh=`git log -1 --pretty=format:git-%h`;\
-		[ -z "$$revh" ] || echo '#define SERNO "'$$revh'"' >include/serno.h ; \
-	elif [ -d .hg ] ; then \
-		revh=`hg parents --template '{date|shortdate}_{node|short}' 2>/dev/null | sed -e s/-//g -e s/_/-/`;\
+		revh=`git show --pretty=format:"%H-%ci" |sed -r 's/^(.{12})[^-]+-([0-9]+)-([0-9]+)-([0-9]+) .*/\2\3\4-\1/; q'`; \
 		[ -z "$$revh" ] || echo '#define SERNO "'$$revh'"' >include/serno.h ; \
 	fi
-	@[ -f include/serno.h ] || echo '#define SERNO "git-unknown"' >include/serno.h
+	@[ -f include/serno.h ] || echo '#define SERNO "unknown"' >include/serno.h
 	@for i in $(SUBDIRS); do \
 		echo "build ==> $$i";\
 		cd $$i;\
@@ -91,7 +79,6 @@ build:
 
 clean:
 	${RM} -f *~ core rsa_respond.tar rsa_respond.tar.gz
-	rm -f include/serno.h
 	@for i in $(CLEANDIRS); do \
 		echo "clean ==> $$i";\
 		cd $$i;\
@@ -129,27 +116,27 @@ lint:
 install-mkdirs:
 	@echo "ircd: setting up ircd directory structure"
 	-@if test ! -d $(DESTDIR)$(prefix); then \
-		mkdir -p -m 755 $(DESTDIR)$(prefix); \
+		mkdir $(DESTDIR)$(prefix); \
 	fi
 	-@if test ! -d $(DESTDIR)$(bindir); then \
-		mkdir -p -m 755 $(DESTDIR)$(bindir); \
+		mkdir $(DESTDIR)$(bindir); \
 	fi
-	-@if test ! -d $(DESTDIR)$(sysconfdir); then \
-		mkdir -p -m 755 $(DESTDIR)$(sysconfdir); \
+	-@if test ! -d $(DESTDIR)$(confdir); then \
+		mkdir $(DESTDIR)$(confdir); \
 	fi
 	-@if test ! -d $(DESTDIR)$(mandir); then \
-		mkdir -p -m 755 $(DESTDIR)$(mandir); \
+		mkdir $(DESTDIR)$(mandir); \
+	fi
+	-@if test ! -d $(DESTDIR)$(moduledir); then \
+		mkdir $(DESTDIR)$(moduledir); \
+	fi
+	-@if test ! -d $(DESTDIR)$(helpdir); then \
+		mkdir $(DESTDIR)$(helpdir); \
 	fi
 	-@if test ! -d $(DESTDIR)$(logdir); then \
-		mkdir -p -m 755 $(DESTDIR)$(logdir); \
+		mkdir $(DESTDIR)$(logdir); \
 	fi
-	-@if test ! -d '$(DESTDIR)$(pkgrundir)'; then \
-		mkdir -p -m 755 '$(DESTDIR)$(pkgrundir)'; \
-	fi
-	-@if test ! -d '$(DESTDIR)$(pkglocalstatedir)'; then \
-		mkdir -p -m 755 '$(DESTDIR)$(pkglocalstatedir)'; \
-	fi
-
+	
 install: install-mkdirs all
 	@for i in $(SUBDIRS); do \
 		echo "install ==> $$i";\

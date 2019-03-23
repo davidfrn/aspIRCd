@@ -1,6 +1,6 @@
 /*
  *  ircd-ratbox: A slightly useful ircd.
- *  m_rules.c: Shows the current network rules from ircd.rules.
+ *  m_rules.c: Show the current rules list.
  *
  *  Copyright (C) 1990 Jarkko Oikarinen and University of Oulu, Co Center
  *  Copyright (C) 1996-2002 Hybrid Development Team
@@ -21,6 +21,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *  USA
  *
+ *  $Id: m_motd.c 254 2005-09-21 23:35:12Z nenolod $
  */
 
 #include "stdinc.h"
@@ -40,58 +41,56 @@ static int m_rules(struct Client *, struct Client *, int, const char **);
 static int mo_rules(struct Client *, struct Client *, int, const char **);
 
 struct Message rules_msgtab = {
-    "RULES", 0, 0, 0, MFLG_SLOW,
-    {mg_unreg, {m_rules, 0}, {mo_rules, 0}, mg_ignore, mg_ignore, {mo_rules, 0}}
+	"RULES", 0, 0, 0, MFLG_SLOW,
+	{mg_unreg, {m_rules, 0}, {mo_rules, 0}, mg_ignore, mg_ignore, {mo_rules, 0}}
 };
-
-int doing_rules_hook;
 
 mapi_clist_av1 rules_clist[] = { &rules_msgtab, NULL };
-mapi_hlist_av1 rules_hlist[] = {
-    { "doing_rules", &doing_rules_hook },
-    { NULL, NULL }
-};
 
-
-DECLARE_MODULE_AV1(rules, NULL, NULL, rules_clist, rules_hlist, NULL, "$Revision: 254 $");
+DECLARE_MODULE_AV1(rules, NULL, NULL, rules_clist, NULL, NULL, "$Revision: 254 $");
 
 /*
-** m_rules
+** m_motd
 **      parv[1] = servername
 */
 static int
 m_rules(struct Client *client_p, struct Client *source_p, int parc, const char *parv[])
 {
-    static time_t last_used = 0;
+	static time_t last_used = 0;
 
-    if((last_used + ConfigFileEntry.pace_wait) > rb_current_time()) {
-        /* safe enough to give this on a local connect only */
-        sendto_one(source_p, form_str(RPL_LOAD2HI),
-                   me.name, source_p->name, "RULES");
-        return 0;
-    } else
-        last_used = rb_current_time();
+	if((last_used + ConfigFileEntry.pace_wait) > rb_current_time())
+	{
+		/* safe enough to give this on a local connect only */
+		sendto_one(source_p, form_str(RPL_LOAD2HI),
+			   me.name, source_p->name, "MOTD");
+		sendto_one(source_p, form_str(RPL_ENDOFMOTD),
+			   me.name, source_p->name);
+		return 0;
+	}
+	else
+		last_used = rb_current_time();
 
-    if(hunt_server(client_p, source_p, ":%s RULES :%s", 1, parc, parv) != HUNTED_ISME)
-        return 0;
+	if(hunt_server(client_p, source_p, ":%s RULES :%s", 1, parc, parv) != HUNTED_ISME)
+		return 0;
 
-    send_user_rules(source_p);
+	//motd_spy(source_p);
+	send_user_rules(source_p);
 
-    return 0;
+	return 0;
 }
 
 /*
-** mo_rules
+** mo_motd
 **      parv[1] = servername
 */
 static int
 mo_rules(struct Client *client_p, struct Client *source_p, int parc, const char *parv[])
 {
-    if(hunt_server(client_p, source_p, ":%s RULES :%s", 1, parc, parv) != HUNTED_ISME)
-        return 0;
+	if(hunt_server(client_p, source_p, ":%s RULES :%s", 1, parc, parv) != HUNTED_ISME)
+		return 0;
 
-    send_user_rules(source_p);
+	//motd_spy(source_p);
+	send_user_rules(source_p);
 
-    return 0;
+	return 0;
 }
-
